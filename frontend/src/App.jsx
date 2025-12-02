@@ -4,6 +4,13 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import Header from './components/layout/Header'
 import Footer from './components/layout/Footer'
 
+// Layouts de administración
+import AdminLayout from './components/layout/AdminLayout'
+import ClientLayout from './components/layout/ClientLayout'
+
+// Componente de ruta protegida
+import ProtectedRoute from './components/auth/ProtectedRoute'
+
 // Páginas públicas
 import Home from './pages/public/Home'
 import Rooms from './pages/public/Rooms'
@@ -13,7 +20,7 @@ import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
-import VerifyEmail from './pages/auth/VerifyEmail' // NUEVO
+import VerifyEmail from './pages/auth/VerifyEmail'
 
 // Páginas de cliente
 import ClientDashboard from './pages/client/Dashboard'
@@ -28,21 +35,6 @@ import UsersManagement from './pages/admin/UsersManagement'
 import ServicesManagement from './pages/admin/ServicesManagement'
 import EmployeesManagement from './pages/admin/EmployeesManagement'
 
-// Componente de ruta protegida
-const ProtectedRoute = ({ children, requireAdmin = false }) => {
-  const { isAuthenticated, isAdmin } = useAuth()
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/auth/login" replace />
-  }
-  
-  if (requireAdmin && !isAdmin) {
-    return <Navigate to="/cliente" replace />
-  }
-  
-  return children
-}
-
 // Componente de layout principal
 const MainLayout = ({ children }) => {
   return (
@@ -56,139 +48,51 @@ const MainLayout = ({ children }) => {
   )
 }
 
-// Componente de layout de autenticación (sin header/footer)
-const AuthLayout = ({ children }) => {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {children}
-    </div>
-  )
-}
-
 function App() {
   return (
     <Router>
       <AuthProvider>
         <div className="App">
           <Routes>
-            {/* Rutas públicas con layout completo */}
-            <Route path="/" element={
-              <MainLayout>
-                <Home />
-              </MainLayout>
-            } />
-            <Route path="/habitaciones" element={
-              <MainLayout>
-                <Rooms />
-              </MainLayout>
-            } />
-            <Route path="/servicios" element={
-              <MainLayout>
-                <Services />
-              </MainLayout>
-            } />
-            <Route path="/contacto" element={
-              <MainLayout>
-                <Contact />
-              </MainLayout>
-            } />
+            {/* ===== RUTAS PÚBLICAS ===== */}
+            <Route path="/" element={<MainLayout><Home /></MainLayout>} />
+            <Route path="/habitaciones" element={<MainLayout><Rooms /></MainLayout>} />
+            <Route path="/servicios" element={<MainLayout><Services /></MainLayout>} />
+            <Route path="/contacto" element={<MainLayout><Contact /></MainLayout>} />
 
-            {/* Rutas de autenticación (sin layout) */}
-            <Route path="/auth/login" element={
-              <AuthLayout>
-                <Login />
-              </AuthLayout>
-            } />
-            <Route path="/auth/register" element={
-              <AuthLayout>
-                <Register />
-              </AuthLayout>
-            } />
-            <Route path="/auth/forgot-password" element={
-              <AuthLayout>
-                <ForgotPassword />
-              </AuthLayout>
-            } />
-            <Route path="/auth/reset-password" element={
-              <AuthLayout>
-                <ResetPassword />
-              </AuthLayout>
-            } />
-            {/* NUEVA RUTA DE VERIFICACIÓN DE EMAIL */}
-            <Route path="/auth/verify-email" element={
-              <AuthLayout>
-                <VerifyEmail />
-              </AuthLayout>
-            } />
+            {/* ===== RUTAS DE AUTENTICACIÓN ===== */}
+            <Route path="/auth/login" element={<Login />} />
+            <Route path="/auth/register" element={<Register />} />
+            <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+            <Route path="/auth/reset-password" element={<ResetPassword />} />
+            <Route path="/auth/verify-email" element={<VerifyEmail />} />
 
-            {/* Rutas de cliente protegidas */}
-            <Route path="/cliente" element={
-              <ProtectedRoute>
-                <MainLayout>
-                  <ClientDashboard />
-                </MainLayout>
+            {/* ===== RUTAS DE CLIENTE ===== */}
+            <Route path="/cliente/*" element={
+              <ProtectedRoute allowedRoles={['Cliente']}>
+                <ClientLayout />
               </ProtectedRoute>
-            } />
-            <Route path="/cliente/reservas" element={
-              <ProtectedRoute>
-                <MainLayout>
-                  <ClientReservations />
-                </MainLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/cliente/perfil" element={
-              <ProtectedRoute>
-                <MainLayout>
-                  <ClientProfile />
-                </MainLayout>
-              </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<ClientDashboard />} />
+              <Route path="reservas" element={<ClientReservations />} />
+              <Route path="perfil" element={<ClientProfile />} />
+            </Route>
 
-            {/* Rutas de administración protegidas */}
-            <Route path="/admin" element={
-              <ProtectedRoute requireAdmin={true}>
-                <MainLayout>
-                  <AdminDashboard />
-                </MainLayout>
+            {/* ===== RUTAS DE ADMINISTRACIÓN (para EMPLEADOS) ===== */}
+            <Route path="/admin/*" element={
+              <ProtectedRoute allowedRoles={['Empleado']}>
+                <AdminLayout />
               </ProtectedRoute>
-            } />
-            <Route path="/admin/habitaciones" element={
-              <ProtectedRoute requireAdmin={true}>
-                <MainLayout>
-                  <RoomsManagement />
-                </MainLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/reservas" element={
-              <ProtectedRoute requireAdmin={true}>
-                <MainLayout>
-                  <ReservationsManagement />
-                </MainLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/usuarios" element={
-              <ProtectedRoute requireAdmin={true}>
-                <MainLayout>
-                  <UsersManagement />
-                </MainLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/servicios" element={
-              <ProtectedRoute requireAdmin={true}>
-                <MainLayout>
-                  <ServicesManagement />
-                </MainLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/empleados" element={
-              <ProtectedRoute requireAdmin={true}>
-                <MainLayout>
-                  <EmployeesManagement />
-                </MainLayout>
-              </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<AdminDashboard />} />
+              <Route path="habitaciones" element={<RoomsManagement />} />
+              <Route path="reservas" element={<ReservationsManagement />} />
+              <Route path="usuarios" element={<UsersManagement />} />
+              <Route path="servicios" element={<ServicesManagement />} />
+              <Route path="empleados" element={<EmployeesManagement />} />
+            </Route>
 
-            {/* Ruta por defecto */}
+            {/* ===== RUTA POR DEFECTO ===== */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

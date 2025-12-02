@@ -59,12 +59,46 @@ const Login = () => {
       }
 
       console.log('✅ Login successful, user:', data.user)
-      
+      console.log('🔍 Detalles del usuario recibido:', {
+        role: data.user.role,
+        usuario_acceso: data.user.usuario_acceso,
+        cargo_empleado: data.user.cargo_empleado,
+        id_empleado: data.user.id_empleado,
+        nombre_empleado: data.user.nombre_empleado
+      })
+
       // Guardar en contexto y localStorage
       login(data.user, data.accessToken)
-      
-      // Redirigir a la página previa o al dashboard
-      navigate(from, { replace: true })
+
+      // === REDIRECCIÓN CORREGIDA - MANEJA MAYÚSCULAS/MINÚSCULAS ===
+      const userRole = data.user.role || data.user.usuario_acceso
+      const roleLower = userRole ? userRole.toString().toLowerCase() : ''
+
+      // Verificar si es empleado basado en múltiples criterios
+      const isEmployee = (
+        roleLower === 'empleado' ||
+        (data.user.cargo_empleado && data.user.cargo_empleado !== '' && data.user.cargo_empleado !== null) ||
+        (data.user.id_empleado && (data.user.id_empleado > 0 || data.user.id_empleado !== undefined)) ||
+        (data.user.nombre_empleado && data.user.nombre_empleado !== '' && data.user.nombre_empleado !== null)
+      )
+
+      console.log('🔍 Login - Verificación final de empleado:', {
+        userRole,
+        roleLower,
+        cargo_empleado: data.user.cargo_empleado,
+        id_empleado: data.user.id_empleado,
+        nombre_empleado: data.user.nombre_empleado,
+        isEmployee: isEmployee
+      })
+
+      // Redirigir basado en el tipo de usuario
+      if (isEmployee) {
+        console.log('🚀 Redirigiendo EMPLEADO a /admin')
+        navigate('/admin', { replace: true })
+      } else {
+        console.log('🚀 Redirigiendo CLIENTE a /cliente')
+        navigate('/cliente', { replace: true })
+      }
 
     } catch (error) {
       console.error('❌ Login error:', error)
@@ -116,8 +150,21 @@ const Login = () => {
       // Guardar en contexto y localStorage
       login(data.user, data.accessToken)
       
-      // Redirigir a la página previa o al dashboard
-      navigate(from, { replace: true })
+      // Redirigir según el tipo de usuario
+      const userRole = data.user.role || data.user.usuario_acceso
+      const roleLower = userRole ? userRole.toString().toLowerCase() : ''
+      
+      const isEmployee = (
+        roleLower === 'empleado' ||
+        (data.user.cargo_empleado && data.user.cargo_empleado !== null && data.user.cargo_empleado !== '') ||
+        (data.user.id_empleado && data.user.id_empleado > 0)
+      )
+      
+      if (isEmployee) {
+        navigate('/admin', { replace: true })
+      } else {
+        navigate('/cliente', { replace: true })
+      }
 
     } catch (error) {
       console.error('❌ Google login error:', error)

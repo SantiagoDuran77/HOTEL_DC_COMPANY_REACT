@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const { user, isAuthenticated, loading } = useAuth()
+  const { user, isAuthenticated, getUserRole, loading } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -14,17 +14,33 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     )
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated()) {
     // Redirigir al login guardando la ubicación actual
     return <Navigate to="/auth/login" state={{ from: location }} replace />
   }
 
   // Verificar roles si se especifican
   if (allowedRoles.length > 0) {
-    const userRole = user?.usuario_acceso || user?.role
+    const userRole = getUserRole()
+    
+    console.log('🔍 ProtectedRoute - Verificación de rol:', {
+      userRole,
+      allowedRoles,
+      userData: user,
+      usuario_acceso: user?.usuario_acceso,
+      role: user?.role,
+      cargo_empleado: user?.cargo_empleado
+    })
     
     if (!allowedRoles.includes(userRole)) {
-      return <Navigate to="/" replace />
+      // Redirigir según el tipo de usuario
+      if (userRole === 'Empleado') {
+        console.log('⛔ Usuario no tiene acceso, redirigiendo a /admin')
+        return <Navigate to="/admin" replace />
+      } else {
+        console.log('⛔ Usuario no tiene acceso, redirigiendo a /cliente')
+        return <Navigate to="/cliente" replace />
+      }
     }
   }
 

@@ -26,7 +26,9 @@ const EmployeesManagement = () => {
 
   const loadEmployees = async () => {
     try {
+      setLoading(true)
       const employeesData = await getEmployees()
+      console.log('📊 Employees loaded:', employeesData)
       setEmployees(employeesData)
     } catch (error) {
       console.error('Error loading employees:', error)
@@ -35,19 +37,34 @@ const EmployeesManagement = () => {
     }
   }
 
-  const filteredEmployees = employees.filter(employee =>
-    (employee.nombre_empleado.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     employee.apellido_empleado.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     employee.correo_empleado.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (positionFilter === 'all' || employee.cargo_empleado === positionFilter) &&
-    (statusFilter === 'all' || employee.estado_usuario === statusFilter)
-  )
+  const filteredEmployees = employees.filter(employee => {
+    const nombre = employee.nombre_empleado || employee.nombre || ''
+    const apellido = employee.apellido_empleado || employee.apellido || ''
+    const email = employee.correo_empleado || employee.email || ''
+    const cargo = employee.cargo_empleado || employee.cargo || ''
+    const estado = employee.estado_usuario || employee.estado || ''
+    
+    const matchesSearch = (
+      nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cargo.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    
+    const matchesPosition = positionFilter === 'all' || cargo === positionFilter
+    const matchesStatus = statusFilter === 'all' || estado === statusFilter
+    
+    return matchesSearch && matchesPosition && matchesStatus
+  })
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
+      console.log('📤 Submitting employee data:', formData)
+      
       if (editingEmployee) {
-        await updateEmployee(editingEmployee.id_empleado, formData)
+        const employeeId = editingEmployee.id_empleado || editingEmployee.id
+        await updateEmployee(employeeId.toString(), formData)
       } else {
         await createEmployee(formData)
       }
@@ -56,18 +73,20 @@ const EmployeesManagement = () => {
       resetForm()
     } catch (error) {
       console.error('Error saving employee:', error)
+      alert('Error al guardar el empleado: ' + error.message)
     }
   }
 
   const handleEdit = (employee) => {
+    console.log('✏️ Editing employee:', employee)
     setEditingEmployee(employee)
     setFormData({
-      nombre_empleado: employee.nombre_empleado,
-      apellido_empleado: employee.apellido_empleado,
-      correo_empleado: employee.correo_empleado,
-      telefono_empleado: employee.telefono_empleado || '',
-      cargo_empleado: employee.cargo_empleado,
-      fecha_contratacion: employee.fecha_contratacion,
+      nombre_empleado: employee.nombre_empleado || employee.nombre || '',
+      apellido_empleado: employee.apellido_empleado || employee.apellido || '',
+      correo_empleado: employee.correo_empleado || employee.email || '',
+      telefono_empleado: employee.telefono_empleado || employee.telefono || '',
+      cargo_empleado: employee.cargo_empleado || employee.cargo || 'Recepcionista',
+      fecha_contratacion: employee.fecha_contratacion || employee.hire_date || new Date().toISOString().split('T')[0],
       contraseña: ''
     })
     setShowModal(true)
@@ -76,20 +95,23 @@ const EmployeesManagement = () => {
   const handleDelete = async (id) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este empleado?')) {
       try {
-        await deleteEmployee(id)
+        await deleteEmployee(id.toString())
         await loadEmployees()
       } catch (error) {
         console.error('Error deleting employee:', error)
+        alert('Error al eliminar el empleado: ' + error.message)
       }
     }
   }
 
-  const handleStatusChange = async (id, newStatus) => {
+  const handleStatusChange = async (employee, newStatus) => {
     try {
-      await updateEmployeeStatus(id, newStatus)
+      const employeeId = employee.id_empleado || employee.id
+      await updateEmployeeStatus(employeeId.toString(), newStatus)
       await loadEmployees()
     } catch (error) {
       console.error('Error updating employee status:', error)
+      alert('Error al cambiar estado: ' + error.message)
     }
   }
 
@@ -107,7 +129,12 @@ const EmployeesManagement = () => {
   }
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('es-CO')
+    if (!dateString) return 'No especificada'
+    try {
+      return new Date(dateString).toLocaleDateString('es-CO')
+    } catch {
+      return 'Fecha inválida'
+    }
   }
 
   const getPositionColor = (position) => {
@@ -199,90 +226,104 @@ const EmployeesManagement = () => {
 
       {/* Employees Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredEmployees.map((employee) => (
-          <div key={employee.id_empleado} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center space-x-4 mb-4">
-              <div className="bg-primary-100 text-primary-600 p-3 rounded-lg">
-                <Users className="h-6 w-6" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {employee.nombre_empleado} {employee.apellido_empleado}
-                </h3>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPositionColor(employee.cargo_empleado)}`}>
-                    <Briefcase className="h-3 w-3 mr-1" />
-                    {employee.cargo_empleado}
-                  </span>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(employee.estado_usuario)}`}>
-                    {employee.estado_usuario}
-                  </span>
+        {filteredEmployees.map((employee) => {
+          const nombre = employee.nombre_empleado || employee.nombre || ''
+          const apellido = employee.apellido_empleado || employee.apellido || ''
+          const email = employee.correo_empleado || employee.email || ''
+          const telefono = employee.telefono_empleado || employee.telefono || ''
+          const cargo = employee.cargo_empleado || employee.cargo || ''
+          const estado = employee.estado_usuario || employee.estado || 'Activo'
+          const fechaContratacion = employee.fecha_contratacion || employee.hire_date || ''
+          const employeeId = employee.id_empleado || employee.id
+
+          return (
+            <div key={employeeId} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center space-x-4 mb-4">
+                <div className="bg-primary-100 text-primary-600 p-3 rounded-lg">
+                  <Users className="h-6 w-6" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {nombre} {apellido}
+                  </h3>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPositionColor(cargo)}`}>
+                      <Briefcase className="h-3 w-3 mr-1" />
+                      {cargo}
+                    </span>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(estado)}`}>
+                      {estado}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center text-sm text-gray-600">
-                <Mail className="h-4 w-4 mr-2" />
-                <span className="truncate">{employee.correo_empleado}</span>
-              </div>
-
-              {employee.telefono_empleado && (
+              <div className="space-y-3">
                 <div className="flex items-center text-sm text-gray-600">
-                  <Phone className="h-4 w-4 mr-2" />
-                  <span>{employee.telefono_empleado}</span>
+                  <Mail className="h-4 w-4 mr-2" />
+                  <span className="truncate">{email}</span>
                 </div>
-              )}
 
-              <div className="flex items-center text-sm text-gray-600">
-                <Calendar className="h-4 w-4 mr-2" />
-                <span>Contratado: {formatDate(employee.fecha_contratacion)}</span>
+                {telefono && (
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Phone className="h-4 w-4 mr-2" />
+                    <span>{telefono}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center text-sm text-gray-600">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  <span>Contratado: {formatDate(fechaContratacion)}</span>
+                </div>
+              </div>
+
+              <div className="mt-6 flex space-x-2">
+                <button
+                  onClick={() => handleEdit(employee)}
+                  className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                >
+                  <Edit className="h-4 w-4 mr-1" />
+                  Editar
+                </button>
+                
+                {estado === 'Activo' ? (
+                  <button
+                    onClick={() => handleStatusChange(employee, 'Inactivo')}
+                    className="flex-1 flex items-center justify-center px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                  >
+                    <UserX className="h-4 w-4 mr-1" />
+                    Desactivar
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleStatusChange(employee, 'Activo')}
+                    className="flex-1 flex items-center justify-center px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                  >
+                    <UserCheck className="h-4 w-4 mr-1" />
+                    Activar
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => handleDelete(employeeId)}
+                  className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             </div>
-
-            <div className="mt-6 flex space-x-2">
-              <button
-                onClick={() => handleEdit(employee)}
-                className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
-              >
-                <Edit className="h-4 w-4 mr-1" />
-                Editar
-              </button>
-              
-              {employee.estado_usuario === 'Activo' ? (
-                <button
-                  onClick={() => handleStatusChange(employee.id_empleado, 'Inactivo')}
-                  className="flex-1 flex items-center justify-center px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
-                >
-                  <UserX className="h-4 w-4 mr-1" />
-                  Desactivar
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleStatusChange(employee.id_empleado, 'Activo')}
-                  className="flex-1 flex items-center justify-center px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
-                >
-                  <UserCheck className="h-4 w-4 mr-1" />
-                  Activar
-                </button>
-              )}
-              
-              <button
-                onClick={() => handleDelete(employee.id_empleado)}
-                className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {filteredEmployees.length === 0 && (
         <div className="text-center py-12">
           <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            No hay empleados
+            {searchTerm || positionFilter !== 'all' || statusFilter !== 'all'
+              ? 'No se encontraron empleados' 
+              : 'No hay empleados registrados'
+            }
           </h3>
           <p className="text-gray-600">
             {searchTerm || positionFilter !== 'all' || statusFilter !== 'all'

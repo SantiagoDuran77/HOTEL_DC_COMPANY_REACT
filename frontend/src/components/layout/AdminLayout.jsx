@@ -11,7 +11,9 @@ import {
   X, 
   LogOut,
   User,
-  Building
+  Building,
+  Briefcase,
+  DollarSign
 } from 'lucide-react'
 
 const AdminLayout = () => {
@@ -25,15 +27,84 @@ const AdminLayout = () => {
     { name: 'Habitaciones', href: '/admin/habitaciones', icon: Bed },
     { name: 'Reservas', href: '/admin/reservas', icon: Calendar },
     { name: 'Usuarios', href: '/admin/usuarios', icon: Users },
-    { name: 'Servicios', href: '/admin/servicios', icon: Settings },
+    { name: 'Empleados', href: '/admin/empleados', icon: Briefcase },
+    { name: 'Servicios', href: '/admin/servicios', icon: DollarSign },
+    { name: 'Configuración', href: '/admin/configuracion', icon: Settings },
   ]
 
   const isActive = (path) => location.pathname === path
 
   const handleLogout = () => {
     logout()
-    navigate('/auth/login')
+    navigate('/')
   }
+
+  // Función para obtener el nombre del usuario
+  const getUserName = () => {
+    if (!user) return 'Administrador'
+    
+    // Priorizar nombre_empleado si existe
+    if (user.nombre_empleado) {
+      return user.nombre_empleado
+    }
+    
+    // Si no, usar nombre_cliente (para casos mixtos)
+    if (user.nombre_cliente) {
+      return user.nombre_cliente
+    }
+    
+    // Si no hay nombre, usar email
+    if (user.email) {
+      return user.email.split('@')[0]
+    }
+    
+    return 'Administrador'
+  }
+
+  // Función para obtener el cargo/rol del usuario
+  const getUserRole = () => {
+    if (!user) return 'Administrador'
+    
+    // Priorizar cargo_empleado si existe
+    if (user.cargo_empleado) {
+      return user.cargo_empleado
+    }
+    
+    // Si no, usar role o usuario_acceso
+    if (user.role) {
+      return user.role.charAt(0).toUpperCase() + user.role.slice(1)
+    }
+    
+    if (user.usuario_acceso) {
+      return user.usuario_acceso
+    }
+    
+    return 'Administrador'
+  }
+
+  // Función para obtener el email del usuario
+  const getUserEmail = () => {
+    if (!user) return ''
+    
+    // Priorizar correo_empleado si existe
+    if (user.correo_empleado) {
+      return user.correo_empleado
+    }
+    
+    // Si no, usar correo_usuario
+    if (user.correo_usuario) {
+      return user.correo_usuario
+    }
+    
+    // Si no, usar email
+    if (user.email) {
+      return user.email
+    }
+    
+    return ''
+  }
+
+  console.log('🏢 AdminLayout - Datos del usuario:', user)
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -44,7 +115,7 @@ const AdminLayout = () => {
             {/* Logo */}
             <div className="flex items-center flex-shrink-0 px-4">
               <div className="flex items-center space-x-3">
-                <div className="bg-blue-600 text-white p-2 rounded-lg">
+                <div className="bg-primary-500 text-white p-2 rounded-lg">
                   <Building className="h-6 w-6" />
                 </div>
                 <div>
@@ -65,12 +136,12 @@ const AdminLayout = () => {
                       to={item.href}
                       className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 ${
                         isActive(item.href)
-                          ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600'
+                          ? 'bg-primary-50 text-primary-600 border-r-2 border-primary-600'
                           : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`}
                     >
                       <Icon className={`flex-shrink-0 h-5 w-5 mr-3 ${
-                        isActive(item.href) ? 'text-blue-600' : 'text-gray-400'
+                        isActive(item.href) ? 'text-primary-600' : 'text-gray-400'
                       }`} />
                       {item.name}
                     </Link>
@@ -83,21 +154,24 @@ const AdminLayout = () => {
             <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
               <div className="flex items-center w-full">
                 <div className="flex-shrink-0">
-                  <div className="bg-blue-100 text-blue-600 h-10 w-10 rounded-full flex items-center justify-center">
+                  <div className="bg-primary-100 text-primary-600 h-10 w-10 rounded-full flex items-center justify-center">
                     <User className="h-5 w-5" />
                   </div>
                 </div>
                 <div className="ml-3 flex-1">
                   <p className="text-sm font-medium text-gray-900">
-                    {user?.nombre_empleado || 'Administrador'}
+                    {getUserName()}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {user?.cargo_empleado || 'Administrador'}
+                    {getUserRole()}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {getUserEmail()}
                   </p>
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="ml-3 flex-shrink-0 text-gray-400 hover:text-gray-500 transition-colors duration-200"
+                  className="ml-3 flex-shrink-0 text-gray-400 hover:text-gray-500"
                   title="Cerrar sesión"
                 >
                   <LogOut className="h-5 w-5" />
@@ -125,7 +199,7 @@ const AdminLayout = () => {
               <div className="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
                 <div className="flex-shrink-0 flex items-center px-4">
                   <div className="flex items-center space-x-3">
-                    <div className="bg-blue-600 text-white p-2 rounded-lg">
+                    <div className="bg-primary-500 text-white p-2 rounded-lg">
                       <Building className="h-6 w-6" />
                     </div>
                     <div>
@@ -143,13 +217,13 @@ const AdminLayout = () => {
                         to={item.href}
                         className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 ${
                           isActive(item.href)
-                            ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600'
+                            ? 'bg-primary-50 text-primary-600 border-r-2 border-primary-600'
                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                         }`}
                         onClick={() => setSidebarOpen(false)}
                       >
                         <Icon className={`flex-shrink-0 h-5 w-5 mr-3 ${
-                          isActive(item.href) ? 'text-blue-600' : 'text-gray-400'
+                          isActive(item.href) ? 'text-primary-600' : 'text-gray-400'
                         }`} />
                         {item.name}
                       </Link>
@@ -160,15 +234,20 @@ const AdminLayout = () => {
               <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
                 <div className="flex items-center w-full">
                   <div className="flex-shrink-0">
-                    <div className="bg-blue-100 text-blue-600 h-10 w-10 rounded-full flex items-center justify-center">
+                    <div className="bg-primary-100 text-primary-600 h-10 w-10 rounded-full flex items-center justify-center">
                       <User className="h-5 w-5" />
                     </div>
                   </div>
                   <div className="ml-3">
                     <p className="text-sm font-medium text-gray-900">
-                      {user?.nombre_empleado || 'Administrador'}
+                      {getUserName()}
                     </p>
-                    <p className="text-xs text-gray-500">Administrador</p>
+                    <p className="text-xs text-gray-500">
+                      {getUserRole()}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {getUserEmail()}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -182,7 +261,7 @@ const AdminLayout = () => {
         {/* Top bar */}
         <div className="lg:hidden pl-1 pt-1 sm:pl-3 sm:pt-3">
           <button
-            className="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+            className="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
             onClick={() => setSidebarOpen(true)}
           >
             <Menu className="h-6 w-6" />
@@ -191,11 +270,23 @@ const AdminLayout = () => {
 
         <main className="flex-1 relative z-0 overflow-y-auto focus:outline-none">
           <div className="py-6">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <Outlet />
             </div>
           </div>
         </main>
+
+        {/* Footer del admin */}
+        <footer className="bg-white border-t border-gray-200 py-4 px-6">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <p className="text-sm text-gray-600">
+              © {new Date().getFullYear()} Hotel DC Company. Todos los derechos reservados.
+            </p>
+            <p className="text-sm text-gray-500 mt-2 md:mt-0">
+              Sistema de Gestión Hotelera v1.0
+            </p>
+          </div>
+        </footer>
       </div>
     </div>
   )

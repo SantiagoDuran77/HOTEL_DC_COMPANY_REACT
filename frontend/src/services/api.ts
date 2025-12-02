@@ -98,6 +98,13 @@ export interface Employee {
   fecha_contratacion: string
   estado?: string
   nombre_completo?: string
+  id_empleado?: number
+  nombre_empleado?: string
+  apellido_empleado?: string
+  correo_empleado?: string
+  telefono_empleado?: string
+  cargo_empleado?: string
+  estado_usuario?: string
 }
 
 // Interfaces para reservas
@@ -670,52 +677,260 @@ export async function updateReservationStatus(id: string, status: string): Promi
   }
 }
 
-// FUNCIONES PARA USUARIOS
+// FUNCIONES PARA USUARIOS - IMPLEMENTADAS
 export async function getUsers(): Promise<User[]> {
   try {
+    console.log('🔄 Fetching users from:', `${API_BASE_URL}/users`)
+    
     const response = await fetch(`${API_BASE_URL}/users`, {
       headers: getAuthHeaders(),
     })
     
+    console.log('📡 Users response status:', response.status)
+    
     if (!response.ok) {
+      console.error('❌ Error response:', response.status, response.statusText)
       return []
     }
     
     const data = await response.json()
-    return data.users || []
+    console.log('📦 Users data from backend:', data)
+    
+    const usersArray = data.users || data.data || data
+    
+    if (!Array.isArray(usersArray)) {
+      console.error('❌ Expected array but got:', typeof usersArray)
+      return []
+    }
+    
+    console.log('✅ Number of users found:', usersArray.length)
+    
+    return usersArray.map((user: any) => {
+      // Determinar si es empleado o cliente
+      const isEmployee = user.usuario_acceso === 'Empleado' || user.role === 'Empleado' || user.cargo_empleado;
+      
+      return {
+        id: user.id_usuario?.toString() || user.id?.toString(),
+        email: user.correo_usuario || user.email,
+        role: user.usuario_acceso || user.role || (isEmployee ? 'Empleado' : 'Cliente'),
+        status: user.estado_usuario || user.status,
+        registration_date: user.fecha_registro || user.registration_date,
+        name: user.nombre_empleado || user.nombre_cliente || user.name || '',
+        last_name: user.apellido_empleado || user.apellido_cliente || user.last_name || '',
+        phone: user.telefono_empleado || user.telefono_cliente || user.phone || '',
+        address: user.direccion_cliente || user.address,
+        nationality: user.nacionalidad || user.nationality,
+        position: user.cargo_empleado || user.position,
+        hire_date: user.fecha_contratacion || user.hire_date
+      }
+    })
     
   } catch (error) {
-    console.error('Error loading users:', error)
+    console.error('❌ Error in getUsers:', error)
     return []
   }
 }
 
-// FUNCIONES PARA EMPLEADOS
+// FUNCIONES PARA EMPLEADOS - AHORA IMPLEMENTADAS
 export async function getEmployees(): Promise<Employee[]> {
   try {
+    console.log('🔄 Fetching employees from:', `${API_BASE_URL}/employees`)
+    
     const response = await fetch(`${API_BASE_URL}/employees`, {
       headers: getAuthHeaders(),
     })
     
+    console.log('📡 Employees response status:', response.status)
+    
     if (!response.ok) {
+      console.error('❌ Error response:', response.status, response.statusText)
       return []
     }
     
     const data = await response.json()
-    return (data.employees || []).map((emp: DatabaseEmployee) => ({
-      id: emp.id_empleado.toString(),
-      nombre: emp.nombre_empleado,
-      apellido: emp.apellido_empleado,
-      email: emp.correo_empleado,
-      telefono: emp.telefono_empleado || '',
-      cargo: emp.cargo_empleado,
-      fecha_contratacion: emp.fecha_contratacion,
-      estado: emp.estado_usuario || 'Activo',
-      nombre_completo: `${emp.nombre_empleado} ${emp.apellido_empleado}`
-    }))
+    console.log('📦 Employees data from backend:', data)
+    
+    const employeesArray = data.employees || data.data || data
+    
+    if (!Array.isArray(employeesArray)) {
+      console.error('❌ Expected array but got:', typeof employeesArray)
+      return []
+    }
+    
+    console.log('✅ Number of employees found:', employeesArray.length)
+    
+    return employeesArray.map((emp: any) => {
+      const employee: Employee = {
+        id: emp.id_empleado?.toString() || emp.id?.toString(),
+        nombre: emp.nombre_empleado || emp.nombre || '',
+        apellido: emp.apellido_empleado || emp.apellido || '',
+        email: emp.correo_empleado || emp.email || '',
+        telefono: emp.telefono_empleado || emp.telefono || '',
+        cargo: emp.cargo_empleado || emp.cargo || '',
+        fecha_contratacion: emp.fecha_contratacion || emp.hire_date || '',
+        estado: emp.estado_usuario || emp.estado || emp.status || 'Activo',
+        nombre_completo: `${emp.nombre_empleado || emp.nombre} ${emp.apellido_empleado || emp.apellido}`
+      }
+      
+      // Mantener también los nombres originales para compatibilidad
+      if (emp.id_empleado) employee.id_empleado = emp.id_empleado;
+      if (emp.nombre_empleado) employee.nombre_empleado = emp.nombre_empleado;
+      if (emp.apellido_empleado) employee.apellido_empleado = emp.apellido_empleado;
+      if (emp.correo_empleado) employee.correo_empleado = emp.correo_empleado;
+      if (emp.telefono_empleado) employee.telefono_empleado = emp.telefono_empleado;
+      if (emp.cargo_empleado) employee.cargo_empleado = emp.cargo_empleado;
+      if (emp.estado_usuario) employee.estado_usuario = emp.estado_usuario;
+      
+      return employee;
+    })
     
   } catch (error) {
-    return handleApiError(error, 'getEmployees')
+    console.error('❌ Error in getEmployees:', error)
+    return []
+  }
+}
+
+// IMPLEMENTACIÓN DE FUNCIONES PARA EMPLEADOS
+export async function getEmployeeById(id: string): Promise<Employee> {
+  try {
+    console.log('🔄 Fetching employee by ID:', id)
+    
+    const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
+      headers: getAuthHeaders(),
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Empleado ${id} no encontrado`)
+    }
+    
+    const data = await response.json()
+    const emp = data.employee || data
+    
+    return {
+      id: emp.id_empleado?.toString() || emp.id?.toString(),
+      nombre: emp.nombre_empleado || emp.nombre,
+      apellido: emp.apellido_empleado || emp.apellido,
+      email: emp.correo_empleado || emp.email,
+      telefono: emp.telefono_empleado || emp.telefono || '',
+      cargo: emp.cargo_empleado || emp.cargo,
+      fecha_contratacion: emp.fecha_contratacion || emp.hire_date,
+      estado: emp.estado_usuario || emp.estado || 'Activo',
+      nombre_completo: `${emp.nombre_empleado || emp.nombre} ${emp.apellido_empleado || emp.apellido}`
+    }
+  } catch (error) {
+    console.error('Error getting employee by id:', error)
+    throw new Error(`Empleado ${id} no disponible`)
+  }
+}
+
+export async function createEmployee(employeeData: any): Promise<Employee> {
+  try {
+    console.log('🔄 Creating employee:', employeeData)
+    
+    const response = await fetch(`${API_BASE_URL}/employees`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(employeeData),
+    })
+
+    if (!response.ok) {
+      return handleResponseError(response)
+    }
+
+    const result = await response.json()
+    const emp = result.employee || result
+    
+    console.log('✅ Employee created successfully:', emp)
+    
+    return {
+      id: emp.id_empleado?.toString() || emp.id?.toString(),
+      nombre: emp.nombre_empleado || emp.nombre,
+      apellido: emp.apellido_empleado || emp.apellido,
+      email: emp.correo_empleado || emp.email,
+      telefono: emp.telefono_empleado || emp.telefono || '',
+      cargo: emp.cargo_empleado || emp.cargo,
+      fecha_contratacion: emp.fecha_contratacion || emp.hire_date,
+      estado: emp.estado_usuario || emp.estado || 'Activo',
+      nombre_completo: `${emp.nombre_empleado || emp.nombre} ${emp.apellido_empleado || emp.apellido}`
+    }
+  } catch (error: any) {
+    console.error('Error in createEmployee:', error)
+    throw error
+  }
+}
+
+export async function updateEmployee(id: string, employeeData: any): Promise<Employee> {
+  try {
+    console.log('🔄 Updating employee:', id, employeeData)
+    
+    const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(employeeData),
+    })
+
+    if (!response.ok) {
+      return handleResponseError(response)
+    }
+
+    const result = await response.json()
+    const emp = result.employee || result
+    
+    console.log('✅ Employee updated successfully:', emp)
+    
+    return {
+      id: emp.id_empleado?.toString() || emp.id?.toString(),
+      nombre: emp.nombre_empleado || emp.nombre,
+      apellido: emp.apellido_empleado || emp.apellido,
+      email: emp.correo_empleado || emp.email,
+      telefono: emp.telefono_empleado || emp.telefono || '',
+      cargo: emp.cargo_empleado || emp.cargo,
+      fecha_contratacion: emp.fecha_contratacion || emp.hire_date,
+      estado: emp.estado_usuario || emp.estado || 'Activo',
+      nombre_completo: `${emp.nombre_empleado || emp.nombre} ${emp.apellido_empleado || emp.apellido}`
+    }
+  } catch (error: any) {
+    console.error('Error in updateEmployee:', error)
+    throw error
+  }
+}
+
+export async function deleteEmployee(id: string): Promise<void> {
+  try {
+    console.log('🔄 Deleting employee:', id)
+    
+    const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    })
+
+    if (!response.ok) {
+      return handleResponseError(response)
+    }
+
+    console.log('✅ Employee deleted successfully')
+  } catch (error) {
+    return handleApiError(error, 'deleteEmployee')
+  }
+}
+
+export async function updateEmployeeStatus(id: string, status: string): Promise<void> {
+  try {
+    console.log('🔄 Updating employee status:', id, status)
+    
+    const response = await fetch(`${API_BASE_URL}/employees/${id}/status`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ status }),
+    })
+
+    if (!response.ok) {
+      return handleResponseError(response)
+    }
+    
+    console.log('✅ Employee status updated successfully')
+  } catch (error) {
+    return handleApiError(error, 'updateEmployeeStatus')
   }
 }
 
@@ -784,27 +999,23 @@ export async function deleteUser(id: string): Promise<void> {
 }
 
 export async function updateUserStatus(id: string, status: string): Promise<void> {
-  throw new Error('Función no implementada')
-}
+  try {
+    console.log('🔄 Updating user status:', id, status)
+    
+    const response = await fetch(`${API_BASE_URL}/users/${id}/status`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ status }),
+    })
 
-export async function getEmployeeById(id: string): Promise<Employee> {
-  throw new Error('Función no implementada')
-}
-
-export async function createEmployee(employeeData: Omit<Employee, 'id' | 'nombre_completo'>): Promise<Employee> {
-  throw new Error('Función no implementada')
-}
-
-export async function updateEmployee(id: string, employeeData: Partial<Employee>): Promise<Employee> {
-  throw new Error('Función no implementada')
-}
-
-export async function deleteEmployee(id: string): Promise<void> {
-  throw new Error('Función no implementada')
-}
-
-export async function updateEmployeeStatus(id: string, status: string): Promise<void> {
-  throw new Error('Función no implementada')
+    if (!response.ok) {
+      return handleResponseError(response)
+    }
+    
+    console.log('✅ User status updated successfully')
+  } catch (error) {
+    return handleApiError(error, 'updateUserStatus')
+  }
 }
 
 // Servicios de autenticación (para compatibilidad)
