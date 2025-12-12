@@ -12,6 +12,7 @@ import Home from '../pages/public/Home'
 import Rooms from '../pages/public/Rooms'
 import Services from '../pages/public/Services'
 import Contact from '../pages/public/Contact'
+import Booking from '../pages/public/Booking' // NUEVA IMPORTACIÓN
 
 // Auth Pages
 import Login from '../pages/auth/Login'
@@ -42,6 +43,8 @@ const AppRoutes = () => {
         <Route path="habitaciones" element={<Rooms />} />
         <Route path="servicios" element={<Services />} />
         <Route path="contacto" element={<Contact />} />
+        {/* NUEVA RUTA PARA RESERVAS */}
+        <Route path="reservar" element={<Booking />} />
       </Route>
 
       {/* Auth Routes */}

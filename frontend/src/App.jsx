@@ -1,8 +1,6 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './context/AuthContext'
-import Header from './components/layout/Header'
-import Footer from './components/layout/Footer'
+import { AuthProvider } from './context/AuthContext'
 
 // Layouts de administración
 import AdminLayout from './components/layout/AdminLayout'
@@ -16,6 +14,7 @@ import Home from './pages/public/Home'
 import Rooms from './pages/public/Rooms'
 import Services from './pages/public/Services'
 import Contact from './pages/public/Contact'
+import Booking from './pages/public/Booking' // NUEVO IMPORT
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import ForgotPassword from './pages/auth/ForgotPassword'
@@ -48,6 +47,10 @@ const MainLayout = ({ children }) => {
   )
 }
 
+// Importar Header y Footer
+import Header from './components/layout/Header'
+import Footer from './components/layout/Footer'
+
 function App() {
   return (
     <Router>
@@ -59,6 +62,8 @@ function App() {
             <Route path="/habitaciones" element={<MainLayout><Rooms /></MainLayout>} />
             <Route path="/servicios" element={<MainLayout><Services /></MainLayout>} />
             <Route path="/contacto" element={<MainLayout><Contact /></MainLayout>} />
+            {/* NUEVA RUTA DE RESERVAS */}
+            <Route path="/reservar" element={<MainLayout><Booking /></MainLayout>} />
 
             {/* ===== RUTAS DE AUTENTICACIÓN ===== */}
             <Route path="/auth/login" element={<Login />} />

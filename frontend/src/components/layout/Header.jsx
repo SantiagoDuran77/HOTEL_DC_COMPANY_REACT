@@ -21,6 +21,7 @@ const Header = () => {
     { name: 'Habitaciones', href: '/habitaciones' },
     { name: 'Servicios', href: '/servicios' },
     { name: 'Contacto', href: '/contacto' },
+    { name: 'Reservar', href: '/reservar' }, // NUEVO: Enlace a reservas
   ]
 
   const isActive = (path) => location.pathname === path
@@ -61,7 +62,7 @@ const Header = () => {
 
           {/* User Menu */}
           <div className="flex items-center space-x-4">
-            {isAuthenticated ? (
+            {isAuthenticated() ? (
               <div className="relative">
                 <button
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -77,14 +78,14 @@ const Header = () => {
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                     <div className="px-4 py-2 border-b border-gray-100">
                       <p className="text-sm font-medium text-gray-900">
-                        {user?.nombre_cliente || user?.nombre_empleado}
+                        {user?.nombre_cliente || user?.nombre_empleado || 'Usuario'}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        {user?.correo_cliente || user?.correo_empleado}
+                      <p className="text-xs text-gray-500 truncate">
+                        {user?.correo_cliente || user?.correo_empleado || user?.email || ''}
                       </p>
                     </div>
                     
-                    {isAdmin ? (
+                    {isAdmin() ? (
                       <Link
                         to="/admin"
                         className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -160,7 +161,7 @@ const Header = () => {
                 </Link>
               ))}
               
-              {!isAuthenticated && (
+              {!isAuthenticated() && (
                 <>
                   <Link
                     to="/auth/login"

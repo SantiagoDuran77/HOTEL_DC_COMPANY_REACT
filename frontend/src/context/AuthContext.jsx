@@ -21,13 +21,39 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = () => {
     try {
       const userData = localStorage.getItem('user')
-      if (userData) {
-        const parsedUser = JSON.parse(userData)
-        console.log('🔄 AuthContext - Usuario cargado:', parsedUser)
-        setUser(parsedUser)
+      const token = localStorage.getItem('accessToken')
+      
+      console.log('🔄 AuthContext - Verificando autenticación:', { 
+        tieneUser: !!userData, 
+        tieneToken: !!token 
+      })
+      
+      if (userData && token) {
+        try {
+          const parsedUser = JSON.parse(userData)
+          // Validar que el usuario tenga los campos mínimos
+          if (parsedUser && (parsedUser.correo_usuario || parsedUser.email)) {
+            console.log('✅ AuthContext - Usuario cargado:', parsedUser)
+            setUser(parsedUser)
+          } else {
+            console.log('⚠️  AuthContext - Datos de usuario inválidos')
+            localStorage.removeItem('user')
+            localStorage.removeItem('accessToken')
+            setUser(null)
+          }
+        } catch (parseError) {
+          console.error('❌ Error parsing user data:', parseError)
+          localStorage.removeItem('user')
+          localStorage.removeItem('accessToken')
+          setUser(null)
+        }
+      } else {
+        console.log('🔓 AuthContext - No hay usuario autenticado')
+        setUser(null)
       }
     } catch (error) {
-      console.error('Error checking auth:', error)
+      console.error('❌ Error checking auth:', error)
+      setUser(null)
     } finally {
       setLoading(false)
     }
@@ -41,6 +67,7 @@ export const AuthProvider = ({ children }) => {
   }
 
   const logout = () => {
+    console.log('👋 AuthContext - Logout')
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
@@ -48,17 +75,39 @@ export const AuthProvider = ({ children }) => {
     window.location.href = '/auth/login'
   }
 
-  // Función que verifica autenticación
+  // Función que verifica autenticación CORREGIDA
   const isAuthenticated = () => {
     const token = localStorage.getItem('accessToken')
     const userData = localStorage.getItem('user')
-    const result = !!token && !!userData
-    console.log('🔐 isAuthenticated:', result)
-    return result
+    
+    // Verificar que ambos existan y sean válidos
+    if (!token || !userData) {
+      console.log('🔐 isAuthenticated: false - Falta token o user data')
+      return false
+    }
+    
+    try {
+      const parsedUser = JSON.parse(userData)
+      const isValid = !!token && !!parsedUser && (parsedUser.correo_usuario || parsedUser.email)
+      console.log('🔐 isAuthenticated:', isValid, { 
+        tokenExists: !!token,
+        userValid: !!parsedUser,
+        emailExists: !!(parsedUser.correo_usuario || parsedUser.email)
+      })
+      return isValid
+    } catch (error) {
+      console.error('❌ Error parsing user in isAuthenticated:', error)
+      return false
+    }
   }
 
   // Función que verifica si es ADMIN/EMPLEADO
   const isAdmin = () => {
+    if (!isAuthenticated()) {
+      console.log('❌ No está autenticado, no puede ser admin')
+      return false
+    }
+    
     const currentUser = user || JSON.parse(localStorage.getItem('user') || 'null')
     
     if (!currentUser) {
@@ -98,15 +147,25 @@ export const AuthProvider = ({ children }) => {
 
   // Función para obtener el rol del usuario
   const getUserRole = () => {
+    if (!isAuthenticated()) {
+      console.log('🔍 getUserRole: No autenticado')
+      return null
+    }
+    
     const currentUser = user || JSON.parse(localStorage.getItem('user') || 'null')
     
-    if (!currentUser) return null
+    if (!currentUser) {
+      console.log('🔍 getUserRole: No hay usuario')
+      return null
+    }
     
     // Verificar si es admin/empleado
     if (isAdmin()) {
+      console.log('🔍 getUserRole: Es Empleado (Admin)')
       return 'Empleado' // En tu sistema, "Empleado" equivale a "Admin"
     }
     
+    console.log('🔍 getUserRole: Es Cliente')
     return 'Cliente'
   }
 
