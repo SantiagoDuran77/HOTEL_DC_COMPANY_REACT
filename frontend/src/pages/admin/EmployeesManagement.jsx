@@ -19,6 +19,7 @@ const EmployeesManagement = () => {
     fecha_contratacion: new Date().toISOString().split('T')[0],
     contraseña: ''
   })
+  const [formErrors, setFormErrors] = useState({})
 
   useEffect(() => {
     loadEmployees()
@@ -29,9 +30,12 @@ const EmployeesManagement = () => {
       setLoading(true)
       const employeesData = await getEmployees()
       console.log('📊 Employees loaded:', employeesData)
+      
+      // getEmployees() ya devuelve un array directamente
       setEmployees(employeesData)
     } catch (error) {
       console.error('Error loading employees:', error)
+      alert('Error al cargar los empleados: ' + error.message)
     } finally {
       setLoading(false)
     }
@@ -42,7 +46,7 @@ const EmployeesManagement = () => {
     const apellido = employee.apellido_empleado || employee.apellido || ''
     const email = employee.correo_empleado || employee.email || ''
     const cargo = employee.cargo_empleado || employee.cargo || ''
-    const estado = employee.estado_usuario || employee.estado || ''
+    const estado = employee.estado_usuario || employee.estado || employee.status || ''
     
     const matchesSearch = (
       nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -59,22 +63,67 @@ const EmployeesManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    const errors = validateForm()
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      return
+    }
+    
     try {
       console.log('📤 Submitting employee data:', formData)
       
       if (editingEmployee) {
         const employeeId = editingEmployee.id_empleado || editingEmployee.id
-        await updateEmployee(employeeId.toString(), formData)
+        const result = await updateEmployee(employeeId.toString(), formData)
+        
+        if (result.success) {
+          alert('Empleado actualizado exitosamente')
+        } else {
+          throw new Error(result.message || 'Error al actualizar el empleado')
+        }
       } else {
-        await createEmployee(formData)
+        const result = await createEmployee(formData)
+        
+        if (result.success) {
+          alert('Empleado creado exitosamente')
+        } else {
+          throw new Error(result.message || 'Error al crear el empleado')
+        }
       }
+      
       await loadEmployees()
       setShowModal(false)
       resetForm()
+      setFormErrors({})
     } catch (error) {
       console.error('Error saving employee:', error)
       alert('Error al guardar el empleado: ' + error.message)
     }
+  }
+
+  const validateForm = () => {
+    const errors = {}
+    
+    if (!formData.nombre_empleado.trim()) {
+      errors.nombre_empleado = 'El nombre es requerido'
+    }
+    
+    if (!formData.apellido_empleado.trim()) {
+      errors.apellido_empleado = 'El apellido es requerido'
+    }
+    
+    if (!formData.correo_empleado.trim()) {
+      errors.correo_empleado = 'El correo es requerido'
+    } else if (!/\S+@\S+\.\S+/.test(formData.correo_empleado)) {
+      errors.correo_empleado = 'Correo electrónico inválido'
+    }
+    
+    if (!formData.cargo_empleado) {
+      errors.cargo_empleado = 'El cargo es requerido'
+    }
+    
+    return errors
   }
 
   const handleEdit = (employee) => {
@@ -89,14 +138,21 @@ const EmployeesManagement = () => {
       fecha_contratacion: employee.fecha_contratacion || employee.hire_date || new Date().toISOString().split('T')[0],
       contraseña: ''
     })
+    setFormErrors({})
     setShowModal(true)
   }
 
   const handleDelete = async (id) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este empleado?')) {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este empleado? Esta acción no se puede deshacer.')) {
       try {
-        await deleteEmployee(id.toString())
-        await loadEmployees()
+        const result = await deleteEmployee(id.toString())
+        
+        if (result.success) {
+          alert('Empleado eliminado exitosamente')
+          await loadEmployees()
+        } else {
+          throw new Error(result.message || 'Error al eliminar el empleado')
+        }
       } catch (error) {
         console.error('Error deleting employee:', error)
         alert('Error al eliminar el empleado: ' + error.message)
@@ -105,13 +161,22 @@ const EmployeesManagement = () => {
   }
 
   const handleStatusChange = async (employee, newStatus) => {
-    try {
-      const employeeId = employee.id_empleado || employee.id
-      await updateEmployeeStatus(employeeId.toString(), newStatus)
-      await loadEmployees()
-    } catch (error) {
-      console.error('Error updating employee status:', error)
-      alert('Error al cambiar estado: ' + error.message)
+    const action = newStatus === 'Activo' ? 'activar' : 'desactivar'
+    if (window.confirm(`¿Estás seguro de que quieres ${action} a ${employee.nombre_empleado || employee.nombre} ${employee.apellido_empleado || employee.apellido}?`)) {
+      try {
+        const employeeId = employee.id_empleado || employee.id
+        const result = await updateEmployeeStatus(employeeId.toString(), newStatus)
+        
+        if (result.success) {
+          alert(`Estado del empleado actualizado a ${newStatus}`)
+          await loadEmployees()
+        } else {
+          throw new Error(result.message || 'Error al cambiar el estado del empleado')
+        }
+      } catch (error) {
+        console.error('Error updating employee status:', error)
+        alert('Error al cambiar estado: ' + error.message)
+      }
     }
   }
 
@@ -126,6 +191,7 @@ const EmployeesManagement = () => {
       contraseña: ''
     })
     setEditingEmployee(null)
+    setFormErrors({})
   }
 
   const formatDate = (dateString) => {
@@ -167,11 +233,14 @@ const EmployeesManagement = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Gestión de Empleados</h1>
           <p className="text-gray-600 mt-2">
-            Administra los empleados del hotel
+            Administra los empleados del hotel ({employees.length} registrados)
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            resetForm()
+            setShowModal(true)
+          }}
           className="flex items-center px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors duration-200"
         >
           <UserPlus className="h-5 w-5 mr-2" />
@@ -232,12 +301,12 @@ const EmployeesManagement = () => {
           const email = employee.correo_empleado || employee.email || ''
           const telefono = employee.telefono_empleado || employee.telefono || ''
           const cargo = employee.cargo_empleado || employee.cargo || ''
-          const estado = employee.estado_usuario || employee.estado || 'Activo'
+          const estado = employee.estado_usuario || employee.estado || employee.status || 'Activo'
           const fechaContratacion = employee.fecha_contratacion || employee.hire_date || ''
           const employeeId = employee.id_empleado || employee.id
 
           return (
-            <div key={employeeId} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div key={employeeId} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
               <div className="flex items-center space-x-4 mb-4">
                 <div className="bg-primary-100 text-primary-600 p-3 rounded-lg">
                   <Users className="h-6 w-6" />
@@ -252,7 +321,7 @@ const EmployeesManagement = () => {
                       {cargo}
                     </span>
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(estado)}`}>
-                      {estado}
+                      {estado === 'Activo' ? 'Activo' : 'Inactivo'}
                     </span>
                   </div>
                 </div>
@@ -260,19 +329,19 @@ const EmployeesManagement = () => {
 
               <div className="space-y-3">
                 <div className="flex items-center text-sm text-gray-600">
-                  <Mail className="h-4 w-4 mr-2" />
+                  <Mail className="h-4 w-4 mr-2 flex-shrink-0" />
                   <span className="truncate">{email}</span>
                 </div>
 
                 {telefono && (
                   <div className="flex items-center text-sm text-gray-600">
-                    <Phone className="h-4 w-4 mr-2" />
+                    <Phone className="h-4 w-4 mr-2 flex-shrink-0" />
                     <span>{telefono}</span>
                   </div>
                 )}
 
                 <div className="flex items-center text-sm text-gray-600">
-                  <Calendar className="h-4 w-4 mr-2" />
+                  <Calendar className="h-4 w-4 mr-2 flex-shrink-0" />
                   <span>Contratado: {formatDate(fechaContratacion)}</span>
                 </div>
               </div>
@@ -289,7 +358,7 @@ const EmployeesManagement = () => {
                 {estado === 'Activo' ? (
                   <button
                     onClick={() => handleStatusChange(employee, 'Inactivo')}
-                    className="flex-1 flex items-center justify-center px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                    className="flex-1 flex items-center justify-center px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
                   >
                     <UserX className="h-4 w-4 mr-1" />
                     Desactivar
@@ -306,7 +375,7 @@ const EmployeesManagement = () => {
                 
                 <button
                   onClick={() => handleDelete(employeeId)}
-                  className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                  className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -317,7 +386,7 @@ const EmployeesManagement = () => {
       </div>
 
       {filteredEmployees.length === 0 && (
-        <div className="text-center py-12">
+        <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-200">
           <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             {searchTerm || positionFilter !== 'all' || statusFilter !== 'all'
@@ -325,12 +394,21 @@ const EmployeesManagement = () => {
               : 'No hay empleados registrados'
             }
           </h3>
-          <p className="text-gray-600">
+          <p className="text-gray-600 mb-4">
             {searchTerm || positionFilter !== 'all' || statusFilter !== 'all'
-              ? 'No se encontraron empleados que coincidan con tu búsqueda.' 
-              : 'No hay empleados registrados en el sistema.'
+              ? 'Intenta cambiar los filtros de búsqueda.' 
+              : 'Haz clic en "Nuevo Empleado" para agregar el primero.'
             }
           </p>
+          {!searchTerm && positionFilter === 'all' && statusFilter === 'all' && (
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors duration-200 mx-auto"
+            >
+              <UserPlus className="h-5 w-5 mr-2" />
+              Nuevo Empleado
+            </button>
+          )}
         </div>
       )}
 
@@ -353,9 +431,17 @@ const EmployeesManagement = () => {
                       type="text"
                       required
                       value={formData.nombre_empleado}
-                      onChange={(e) => setFormData({...formData, nombre_empleado: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      onChange={(e) => {
+                        setFormData({...formData, nombre_empleado: e.target.value})
+                        setFormErrors({...formErrors, nombre_empleado: ''})
+                      }}
+                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                        formErrors.nombre_empleado ? 'border-red-500' : 'border-gray-300'
+                      }`}
                     />
+                    {formErrors.nombre_empleado && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.nombre_empleado}</p>
+                    )}
                   </div>
                   
                   <div>
@@ -366,9 +452,17 @@ const EmployeesManagement = () => {
                       type="text"
                       required
                       value={formData.apellido_empleado}
-                      onChange={(e) => setFormData({...formData, apellido_empleado: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      onChange={(e) => {
+                        setFormData({...formData, apellido_empleado: e.target.value})
+                        setFormErrors({...formErrors, apellido_empleado: ''})
+                      }}
+                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                        formErrors.apellido_empleado ? 'border-red-500' : 'border-gray-300'
+                      }`}
                     />
+                    {formErrors.apellido_empleado && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.apellido_empleado}</p>
+                    )}
                   </div>
                 </div>
 
@@ -380,9 +474,17 @@ const EmployeesManagement = () => {
                     type="email"
                     required
                     value={formData.correo_empleado}
-                    onChange={(e) => setFormData({...formData, correo_empleado: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setFormData({...formData, correo_empleado: e.target.value})
+                      setFormErrors({...formErrors, correo_empleado: ''})
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                      formErrors.correo_empleado ? 'border-red-500' : 'border-gray-300'
+                    }`}
                   />
+                  {formErrors.correo_empleado && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.correo_empleado}</p>
+                  )}
                 </div>
 
                 <div>
@@ -394,6 +496,7 @@ const EmployeesManagement = () => {
                     value={formData.telefono_empleado}
                     onChange={(e) => setFormData({...formData, telefono_empleado: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="Ej: 3001234567"
                   />
                 </div>
 
@@ -404,8 +507,13 @@ const EmployeesManagement = () => {
                   <select
                     required
                     value={formData.cargo_empleado}
-                    onChange={(e) => setFormData({...formData, cargo_empleado: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setFormData({...formData, cargo_empleado: e.target.value})
+                      setFormErrors({...formErrors, cargo_empleado: ''})
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                      formErrors.cargo_empleado ? 'border-red-500' : 'border-gray-300'
+                    }`}
                   >
                     {positions.map(position => (
                       <option key={position} value={position}>
@@ -413,6 +521,9 @@ const EmployeesManagement = () => {
                       </option>
                     ))}
                   </select>
+                  {formErrors.cargo_empleado && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.cargo_empleado}</p>
+                  )}
                 </div>
 
                 <div>
@@ -439,6 +550,9 @@ const EmployeesManagement = () => {
                       onChange={(e) => setFormData({...formData, contraseña: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     />
+                    <p className="mt-1 text-sm text-gray-500">
+                      La contraseña se truncará a 4 caracteres máximo
+                    </p>
                   </div>
                 )}
 

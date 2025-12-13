@@ -28,6 +28,14 @@ export interface Room {
   amenities?: string[]
 }
 
+// Interface para servicios
+export interface DatabaseService {
+  id_servicio: number
+  nombre_servicio: string
+  descripcion_servicio: string
+  precio_servicio: number
+}
+
 export interface Service {
   id: string
   name: string
@@ -490,34 +498,322 @@ export async function deleteRoom(id: string): Promise<void> {
   }
 }
 
-// FUNCIONES PARA SERVICIOS
+// FUNCIONES PARA SERVICIOS - CRUD COMPLETO
 export async function getServices(): Promise<Service[]> {
   try {
+    console.log('🔄 Fetching services from:', `${API_BASE_URL}/services`)
+    
     const response = await fetch(`${API_BASE_URL}/services`, {
       headers: getAuthHeaders(),
     })
     
+    console.log('📡 Services response status:', response.status)
+    
     if (!response.ok) {
+      console.error('❌ Error response:', response.status, response.statusText)
       return []
     }
     
     const data = await response.json()
+    console.log('📦 Services data from backend:', data)
     
-    return data.services?.map((service: any) => ({
-      id: service.id_servicio?.toString() || service.id?.toString(),
-      name: service.nombre_servicio || service.name,
-      description: service.descripcion_servicio || service.description,
-      price: parseFloat(service.precio_servicio || service.price),
-      category: service.category || 'Otros',
+    // Manejar diferentes formatos de respuesta
+    let servicesArray: any[] = []
+    
+    if (Array.isArray(data)) {
+      servicesArray = data
+    } else if (data.services && Array.isArray(data.services)) {
+      servicesArray = data.services
+    } else if (data.data && Array.isArray(data.data)) {
+      servicesArray = data.data
+    } else if (data.success && data.services && Array.isArray(data.services)) {
+      servicesArray = data.services
+    } else {
+      console.error('❌ Unknown response format:', data)
+      return []
+    }
+    
+    console.log('✅ Number of services found:', servicesArray.length)
+    
+    return servicesArray.map((service: any) => {
+      // Determinar categoría basada en el nombre del servicio
+      const category = getCategoryFromServiceName(service.nombre_servicio || service.name)
+      
+      return {
+        id: (service.id_servicio || service.id).toString(),
+        name: service.nombre_servicio || service.name || '',
+        description: service.descripcion_servicio || service.description || '',
+        price: typeof service.precio_servicio === 'number' ? service.precio_servicio : parseFloat(service.precio_servicio || service.price) || 0,
+        category: category,
+        image: '',
+        nombre_servicio: service.nombre_servicio,
+        descripcion_servicio: service.descripcion_servicio,
+        precio_servicio: parseFloat(service.precio_servicio || service.price),
+        disponible: service.disponible !== false
+      }
+    })
+    
+  } catch (error) {
+    console.error('❌ Error in getServices:', error)
+    return []
+  }
+}
+
+// Función helper para determinar categoría
+function getCategoryFromServiceName(name: string): string {
+  if (!name) return 'Otros'
+  
+  const lowerName = name.toLowerCase()
+  
+  if (lowerName.includes('desayuno') || lowerName.includes('almuerzo') || lowerName.includes('cena') || lowerName.includes('comida')) {
+    return 'Alimentos'
+  }
+  
+  if (lowerName.includes('spa') || lowerName.includes('masaje') || lowerName.includes('jacuzzi')) {
+    return 'Spa y Bienestar'
+  }
+  
+  if (lowerName.includes('transporte') || lowerName.includes('taxi') || lowerName.includes('shuttle') || lowerName.includes('tour')) {
+    return 'Transporte'
+  }
+  
+  if (lowerName.includes('lavandería') || lowerName.includes('lavanderia') || lowerName.includes('limpieza')) {
+    return 'Limpieza'
+  }
+  
+  if (lowerName.includes('gimnasio') || lowerName.includes('piscina')) {
+    return 'Recreación'
+  }
+  
+  if (lowerName.includes('wifi') || lowerName.includes('internet')) {
+    return 'Tecnología'
+  }
+  
+  if (lowerName.includes('parqueadero') || lowerName.includes('estacionamiento')) {
+    return 'Estacionamiento'
+  }
+  
+  if (lowerName.includes('mascota') || lowerName.includes('animal')) {
+    return 'Mascotas'
+  }
+  
+  if (lowerName.includes('llamada') || lowerName.includes('telefono')) {
+    return 'Comunicaciones'
+  }
+  
+  return 'Otros'
+}
+
+export async function getServiceById(id: string): Promise<Service> {
+  try {
+    console.log('🔄 Fetching service by ID:', id)
+    
+    const response = await fetch(`${API_BASE_URL}/services/${id}`, {
+      headers: getAuthHeaders(),
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Error ${response.status}: ${errorText || response.statusText}`)
+    }
+    
+    const data = await response.json()
+    
+    // Manejar diferentes formatos de respuesta
+    let service: any
+    
+    if (Array.isArray(data) && data.length > 0) {
+      service = data[0]
+    } else if (data.service) {
+      service = data.service
+    } else if (data.success && data.service) {
+      service = data.service
+    } else {
+      service = data
+    }
+    
+    const category = getCategoryFromServiceName(service.nombre_servicio || service.name)
+    
+    return {
+      id: (service.id_servicio || service.id).toString(),
+      name: service.nombre_servicio || service.name || '',
+      description: service.descripcion_servicio || service.description || '',
+      price: typeof service.precio_servicio === 'number' ? service.precio_servicio : parseFloat(service.precio_servicio || service.price) || 0,
+      category: category,
       image: '',
       nombre_servicio: service.nombre_servicio,
       descripcion_servicio: service.descripcion_servicio,
       precio_servicio: parseFloat(service.precio_servicio || service.price),
       disponible: service.disponible !== false
-    })) || []
-  } catch (error) {
-    console.error('Error fetching services:', error)
-    return []
+    }
+  } catch (error: any) {
+    console.error('Error getting service by id:', error)
+    throw new Error(error.message || `Servicio ${id} no disponible`)
+  }
+}
+
+export async function createService(serviceData: Omit<DatabaseService, 'id_servicio'>): Promise<{success: boolean; service: Service; message?: string}> {
+  try {
+    console.log('🔄 Creating service:', serviceData)
+    
+    const response = await fetch(`${API_BASE_URL}/services`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(serviceData),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      let errorMessage = `Error ${response.status}: ${response.statusText}`
+      
+      try {
+        const errorData = JSON.parse(errorText)
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch {
+        if (errorText) errorMessage = errorText
+      }
+      
+      throw new Error(errorMessage)
+    }
+
+    const result = await response.json()
+    
+    console.log('✅ Service creation response:', result)
+    
+    let service: any
+    
+    if (result.service) {
+      service = result.service
+    } else if (result.success && result.service) {
+      service = result.service
+    } else {
+      service = result
+    }
+    
+    const category = getCategoryFromServiceName(service.nombre_servicio || service.name)
+    
+    const createdService: Service = {
+      id: (service.id_servicio || service.id).toString(),
+      name: service.nombre_servicio || service.name || '',
+      description: service.descripcion_servicio || service.description || '',
+      price: typeof service.precio_servicio === 'number' ? service.precio_servicio : parseFloat(service.precio_servicio || service.price) || 0,
+      category: category,
+      image: '',
+      nombre_servicio: service.nombre_servicio,
+      descripcion_servicio: service.descripcion_servicio,
+      precio_servicio: parseFloat(service.precio_servicio || service.price),
+      disponible: service.disponible !== false
+    }
+    
+    return {
+      success: result.success || true,
+      service: createdService,
+      message: result.message
+    }
+  } catch (error: any) {
+    console.error('Error in createService:', error)
+    throw error
+  }
+}
+
+export async function updateService(id: string, serviceData: Partial<DatabaseService>): Promise<{success: boolean; service: Service; message?: string}> {
+  try {
+    console.log('🔄 Updating service:', id, serviceData)
+    
+    const response = await fetch(`${API_BASE_URL}/services/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(serviceData),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      let errorMessage = `Error ${response.status}: ${response.statusText}`
+      
+      try {
+        const errorData = JSON.parse(errorText)
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch {
+        if (errorText) errorMessage = errorText
+      }
+      
+      throw new Error(errorMessage)
+    }
+
+    const result = await response.json()
+    
+    console.log('✅ Service update response:', result)
+    
+    let service: any
+    
+    if (result.service) {
+      service = result.service
+    } else if (result.success && result.service) {
+      service = result.service
+    } else {
+      service = result
+    }
+    
+    const category = getCategoryFromServiceName(service.nombre_servicio || service.name)
+    
+    const updatedService: Service = {
+      id: (service.id_servicio || service.id).toString(),
+      name: service.nombre_servicio || service.name || '',
+      description: service.descripcion_servicio || service.description || '',
+      price: typeof service.precio_servicio === 'number' ? service.precio_servicio : parseFloat(service.precio_servicio || service.price) || 0,
+      category: category,
+      image: '',
+      nombre_servicio: service.nombre_servicio,
+      descripcion_servicio: service.descripcion_servicio,
+      precio_servicio: parseFloat(service.precio_servicio || service.price),
+      disponible: service.disponible !== false
+    }
+    
+    return {
+      success: result.success || true,
+      service: updatedService,
+      message: result.message
+    }
+  } catch (error: any) {
+    console.error('Error in updateService:', error)
+    throw error
+  }
+}
+
+export async function deleteService(id: string): Promise<{success: boolean; message?: string}> {
+  try {
+    console.log('🔄 Deleting service:', id)
+    
+    const response = await fetch(`${API_BASE_URL}/services/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      let errorMessage = `Error ${response.status}: ${response.statusText}`
+      
+      try {
+        const errorData = JSON.parse(errorText)
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch {
+        if (errorText) errorMessage = errorText
+      }
+      
+      throw new Error(errorMessage)
+    }
+
+    const result = await response.json()
+    
+    console.log('✅ Service delete response:', result)
+    
+    return {
+      success: result.success || true,
+      message: result.message
+    }
+  } catch (error: any) {
+    console.error('Error in deleteService:', error)
+    throw error
   }
 }
 
@@ -731,7 +1027,7 @@ export async function getUsers(): Promise<User[]> {
   }
 }
 
-// FUNCIONES PARA EMPLEADOS - AHORA IMPLEMENTADAS
+// FUNCIONES PARA EMPLEADOS - CORREGIDAS
 export async function getEmployees(): Promise<Employee[]> {
   try {
     console.log('🔄 Fetching employees from:', `${API_BASE_URL}/employees`)
@@ -740,20 +1036,37 @@ export async function getEmployees(): Promise<Employee[]> {
       headers: getAuthHeaders(),
     })
     
-    console.log('📡 Employees response status:', response.status)
+    console.log('📡 Employees response status:', response.status, response.statusText)
     
     if (!response.ok) {
-      console.error('❌ Error response:', response.status, response.statusText)
+      console.error('❌ Error fetching employees:', response.status, response.statusText)
       return []
     }
     
     const data = await response.json()
-    console.log('📦 Employees data from backend:', data)
+    console.log('📦 Employees raw data:', data)
     
-    const employeesArray = data.employees || data.data || data
+    // Manejar diferentes formatos de respuesta
+    let employeesArray: any[] = []
     
-    if (!Array.isArray(employeesArray)) {
-      console.error('❌ Expected array but got:', typeof employeesArray)
+    if (Array.isArray(data)) {
+      // Si la respuesta es directamente un array
+      console.log('✅ Backend returned direct array')
+      employeesArray = data
+    } else if (data.employees && Array.isArray(data.employees)) {
+      // Si la respuesta tiene propiedad 'employees'
+      console.log('✅ Backend returned object with employees property')
+      employeesArray = data.employees
+    } else if (data.data && Array.isArray(data.data)) {
+      // Si la respuesta tiene propiedad 'data'
+      console.log('✅ Backend returned object with data property')
+      employeesArray = data.data
+    } else if (data.success && data.employees && Array.isArray(data.employees)) {
+      // Si la respuesta tiene success: true y employees
+      console.log('✅ Backend returned success object with employees')
+      employeesArray = data.employees
+    } else {
+      console.error('❌ Unknown response format:', data)
       return []
     }
     
@@ -761,7 +1074,7 @@ export async function getEmployees(): Promise<Employee[]> {
     
     return employeesArray.map((emp: any) => {
       const employee: Employee = {
-        id: emp.id_empleado?.toString() || emp.id?.toString(),
+        id: (emp.id_empleado || emp.id || '').toString(),
         nombre: emp.nombre_empleado || emp.nombre || '',
         apellido: emp.apellido_empleado || emp.apellido || '',
         email: emp.correo_empleado || emp.email || '',
@@ -769,28 +1082,27 @@ export async function getEmployees(): Promise<Employee[]> {
         cargo: emp.cargo_empleado || emp.cargo || '',
         fecha_contratacion: emp.fecha_contratacion || emp.hire_date || '',
         estado: emp.estado_usuario || emp.estado || emp.status || 'Activo',
-        nombre_completo: `${emp.nombre_empleado || emp.nombre} ${emp.apellido_empleado || emp.apellido}`
+        nombre_completo: `${emp.nombre_empleado || emp.nombre || ''} ${emp.apellido_empleado || emp.apellido || ''}`.trim()
       }
       
       // Mantener también los nombres originales para compatibilidad
-      if (emp.id_empleado) employee.id_empleado = emp.id_empleado;
-      if (emp.nombre_empleado) employee.nombre_empleado = emp.nombre_empleado;
-      if (emp.apellido_empleado) employee.apellido_empleado = emp.apellido_empleado;
-      if (emp.correo_empleado) employee.correo_empleado = emp.correo_empleado;
-      if (emp.telefono_empleado) employee.telefono_empleado = emp.telefono_empleado;
-      if (emp.cargo_empleado) employee.cargo_empleado = emp.cargo_empleado;
-      if (emp.estado_usuario) employee.estado_usuario = emp.estado_usuario;
+      if (emp.id_empleado) employee.id_empleado = emp.id_empleado
+      if (emp.nombre_empleado) employee.nombre_empleado = emp.nombre_empleado
+      if (emp.apellido_empleado) employee.apellido_empleado = emp.apellido_empleado
+      if (emp.correo_empleado) employee.correo_empleado = emp.correo_empleado
+      if (emp.telefono_empleado) employee.telefono_empleado = emp.telefono_empleado
+      if (emp.cargo_empleado) employee.cargo_empleado = emp.cargo_empleado
+      if (emp.estado_usuario) employee.estado_usuario = emp.estado_usuario
       
-      return employee;
+      return employee
     })
     
-  } catch (error) {
-    console.error('❌ Error in getEmployees:', error)
+  } catch (error: any) {
+    console.error('❌ Error in getEmployees:', error.message || error)
     return []
   }
 }
 
-// IMPLEMENTACIÓN DE FUNCIONES PARA EMPLEADOS
 export async function getEmployeeById(id: string): Promise<Employee> {
   try {
     console.log('🔄 Fetching employee by ID:', id)
@@ -800,30 +1112,43 @@ export async function getEmployeeById(id: string): Promise<Employee> {
     })
     
     if (!response.ok) {
-      throw new Error(`Empleado ${id} no encontrado`)
+      const errorText = await response.text()
+      throw new Error(`Error ${response.status}: ${errorText || response.statusText}`)
     }
     
     const data = await response.json()
-    const emp = data.employee || data
+    
+    // Manejar diferentes formatos de respuesta
+    let emp: any
+    
+    if (Array.isArray(data) && data.length > 0) {
+      emp = data[0]
+    } else if (data.employee) {
+      emp = data.employee
+    } else if (data.success && data.employee) {
+      emp = data.employee
+    } else {
+      emp = data
+    }
     
     return {
-      id: emp.id_empleado?.toString() || emp.id?.toString(),
-      nombre: emp.nombre_empleado || emp.nombre,
-      apellido: emp.apellido_empleado || emp.apellido,
-      email: emp.correo_empleado || emp.email,
+      id: (emp.id_empleado || emp.id || '').toString(),
+      nombre: emp.nombre_empleado || emp.nombre || '',
+      apellido: emp.apellido_empleado || emp.apellido || '',
+      email: emp.correo_empleado || emp.email || '',
       telefono: emp.telefono_empleado || emp.telefono || '',
-      cargo: emp.cargo_empleado || emp.cargo,
-      fecha_contratacion: emp.fecha_contratacion || emp.hire_date,
+      cargo: emp.cargo_empleado || emp.cargo || '',
+      fecha_contratacion: emp.fecha_contratacion || emp.hire_date || '',
       estado: emp.estado_usuario || emp.estado || 'Activo',
-      nombre_completo: `${emp.nombre_empleado || emp.nombre} ${emp.apellido_empleado || emp.apellido}`
+      nombre_completo: `${emp.nombre_empleado || emp.nombre || ''} ${emp.apellido_empleado || emp.apellido || ''}`.trim()
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting employee by id:', error)
-    throw new Error(`Empleado ${id} no disponible`)
+    throw new Error(error.message || `Empleado ${id} no disponible`)
   }
 }
 
-export async function createEmployee(employeeData: any): Promise<Employee> {
+export async function createEmployee(employeeData: any): Promise<{success: boolean; employee: Employee; message?: string}> {
   try {
     console.log('🔄 Creating employee:', employeeData)
     
@@ -834,24 +1159,49 @@ export async function createEmployee(employeeData: any): Promise<Employee> {
     })
 
     if (!response.ok) {
-      return handleResponseError(response)
+      const errorText = await response.text()
+      let errorMessage = `Error ${response.status}: ${response.statusText}`
+      
+      try {
+        const errorData = JSON.parse(errorText)
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch {
+        if (errorText) errorMessage = errorText
+      }
+      
+      throw new Error(errorMessage)
     }
 
     const result = await response.json()
-    const emp = result.employee || result
     
-    console.log('✅ Employee created successfully:', emp)
+    console.log('✅ Employee creation response:', result)
+    
+    let emp: any
+    
+    if (result.employee) {
+      emp = result.employee
+    } else if (result.success && result.employee) {
+      emp = result.employee
+    } else {
+      emp = result
+    }
+    
+    const employee: Employee = {
+      id: (emp.id_empleado || emp.id || '').toString(),
+      nombre: emp.nombre_empleado || emp.nombre || '',
+      apellido: emp.apellido_empleado || emp.apellido || '',
+      email: emp.correo_empleado || emp.email || '',
+      telefono: emp.telefono_empleado || emp.telefono || '',
+      cargo: emp.cargo_empleado || emp.cargo || '',
+      fecha_contratacion: emp.fecha_contratacion || emp.hire_date || '',
+      estado: emp.estado_usuario || emp.estado || 'Activo',
+      nombre_completo: `${emp.nombre_empleado || emp.nombre || ''} ${emp.apellido_empleado || emp.apellido || ''}`.trim()
+    }
     
     return {
-      id: emp.id_empleado?.toString() || emp.id?.toString(),
-      nombre: emp.nombre_empleado || emp.nombre,
-      apellido: emp.apellido_empleado || emp.apellido,
-      email: emp.correo_empleado || emp.email,
-      telefono: emp.telefono_empleado || emp.telefono || '',
-      cargo: emp.cargo_empleado || emp.cargo,
-      fecha_contratacion: emp.fecha_contratacion || emp.hire_date,
-      estado: emp.estado_usuario || emp.estado || 'Activo',
-      nombre_completo: `${emp.nombre_empleado || emp.nombre} ${emp.apellido_empleado || emp.apellido}`
+      success: result.success || true,
+      employee: employee,
+      message: result.message
     }
   } catch (error: any) {
     console.error('Error in createEmployee:', error)
@@ -859,7 +1209,7 @@ export async function createEmployee(employeeData: any): Promise<Employee> {
   }
 }
 
-export async function updateEmployee(id: string, employeeData: any): Promise<Employee> {
+export async function updateEmployee(id: string, employeeData: any): Promise<{success: boolean; employee: Employee; message?: string}> {
   try {
     console.log('🔄 Updating employee:', id, employeeData)
     
@@ -870,24 +1220,49 @@ export async function updateEmployee(id: string, employeeData: any): Promise<Emp
     })
 
     if (!response.ok) {
-      return handleResponseError(response)
+      const errorText = await response.text()
+      let errorMessage = `Error ${response.status}: ${response.statusText}`
+      
+      try {
+        const errorData = JSON.parse(errorText)
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch {
+        if (errorText) errorMessage = errorText
+      }
+      
+      throw new Error(errorMessage)
     }
 
     const result = await response.json()
-    const emp = result.employee || result
     
-    console.log('✅ Employee updated successfully:', emp)
+    console.log('✅ Employee update response:', result)
+    
+    let emp: any
+    
+    if (result.employee) {
+      emp = result.employee
+    } else if (result.success && result.employee) {
+      emp = result.employee
+    } else {
+      emp = result
+    }
+    
+    const employee: Employee = {
+      id: (emp.id_empleado || emp.id || '').toString(),
+      nombre: emp.nombre_empleado || emp.nombre || '',
+      apellido: emp.apellido_empleado || emp.apellido || '',
+      email: emp.correo_empleado || emp.email || '',
+      telefono: emp.telefono_empleado || emp.telefono || '',
+      cargo: emp.cargo_empleado || emp.cargo || '',
+      fecha_contratacion: emp.fecha_contratacion || emp.hire_date || '',
+      estado: emp.estado_usuario || emp.estado || 'Activo',
+      nombre_completo: `${emp.nombre_empleado || emp.nombre || ''} ${emp.apellido_empleado || emp.apellido || ''}`.trim()
+    }
     
     return {
-      id: emp.id_empleado?.toString() || emp.id?.toString(),
-      nombre: emp.nombre_empleado || emp.nombre,
-      apellido: emp.apellido_empleado || emp.apellido,
-      email: emp.correo_empleado || emp.email,
-      telefono: emp.telefono_empleado || emp.telefono || '',
-      cargo: emp.cargo_empleado || emp.cargo,
-      fecha_contratacion: emp.fecha_contratacion || emp.hire_date,
-      estado: emp.estado_usuario || emp.estado || 'Activo',
-      nombre_completo: `${emp.nombre_empleado || emp.nombre} ${emp.apellido_empleado || emp.apellido}`
+      success: result.success || true,
+      employee: employee,
+      message: result.message
     }
   } catch (error: any) {
     console.error('Error in updateEmployee:', error)
@@ -895,7 +1270,7 @@ export async function updateEmployee(id: string, employeeData: any): Promise<Emp
   }
 }
 
-export async function deleteEmployee(id: string): Promise<void> {
+export async function deleteEmployee(id: string): Promise<{success: boolean; message?: string}> {
   try {
     console.log('🔄 Deleting employee:', id)
     
@@ -905,16 +1280,34 @@ export async function deleteEmployee(id: string): Promise<void> {
     })
 
     if (!response.ok) {
-      return handleResponseError(response)
+      const errorText = await response.text()
+      let errorMessage = `Error ${response.status}: ${response.statusText}`
+      
+      try {
+        const errorData = JSON.parse(errorText)
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch {
+        if (errorText) errorMessage = errorText
+      }
+      
+      throw new Error(errorMessage)
     }
 
-    console.log('✅ Employee deleted successfully')
-  } catch (error) {
-    return handleApiError(error, 'deleteEmployee')
+    const result = await response.json()
+    
+    console.log('✅ Employee delete response:', result)
+    
+    return {
+      success: result.success || true,
+      message: result.message
+    }
+  } catch (error: any) {
+    console.error('Error in deleteEmployee:', error)
+    throw error
   }
 }
 
-export async function updateEmployeeStatus(id: string, status: string): Promise<void> {
+export async function updateEmployeeStatus(id: string, status: string): Promise<{success: boolean; message?: string}> {
   try {
     console.log('🔄 Updating employee status:', id, status)
     
@@ -925,12 +1318,30 @@ export async function updateEmployeeStatus(id: string, status: string): Promise<
     })
 
     if (!response.ok) {
-      return handleResponseError(response)
+      const errorText = await response.text()
+      let errorMessage = `Error ${response.status}: ${response.statusText}`
+      
+      try {
+        const errorData = JSON.parse(errorText)
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch {
+        if (errorText) errorMessage = errorText
+      }
+      
+      throw new Error(errorMessage)
     }
+
+    const result = await response.json()
     
-    console.log('✅ Employee status updated successfully')
-  } catch (error) {
-    return handleApiError(error, 'updateEmployeeStatus')
+    console.log('✅ Employee status update response:', result)
+    
+    return {
+      success: result.success || true,
+      message: result.message
+    }
+  } catch (error: any) {
+    console.error('Error in updateEmployeeStatus:', error)
+    throw error
   }
 }
 
@@ -966,10 +1377,6 @@ export function isAuthenticated(): boolean {
 }
 
 // Funciones placeholder para compatibilidad
-export async function getServiceById(id: string): Promise<Service> {
-  throw new Error('Función no implementada')
-}
-
 export async function getReservationById(id: string): Promise<Reservation> {
   throw new Error('Función no implementada')
 }

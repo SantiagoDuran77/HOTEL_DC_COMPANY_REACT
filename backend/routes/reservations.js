@@ -77,7 +77,7 @@ router.post(
         // Actualizar datos del cliente
         await executeQuery(`
           UPDATE cliente 
-          SET nombre_cliente = ?, telefono_cliente = ?, fecha_actualizacion = NOW()
+          SET nombre_cliente = ?, telefono_cliente = ?
           WHERE id_cliente = ?
         `, [nombre_cliente, telefono_cliente || '', client_id])
       } else {
@@ -88,9 +88,8 @@ router.post(
             nombre_cliente, 
             apellido_cliente, 
             correo_cliente, 
-            telefono_cliente, 
-            fecha_registro
-          ) VALUES (?, ?, ?, ?, NOW())
+            telefono_cliente
+          ) VALUES (?, ?, ?, ?)
         `, [nombre_cliente, '', correo_cliente, telefono_cliente || ''])
         
         client_id = newClient.insertId
@@ -134,25 +133,7 @@ router.post(
         )
       }
 
-      // 7. Si hay solicitudes especiales y la columna existe, guardarlas
-      if (special_requests) {
-        try {
-          const columns = await executeQuery(`
-            SHOW COLUMNS FROM detalle_reserva LIKE 'observaciones'
-          `)
-          
-          if (columns.length > 0) {
-            await executeQuery(
-              `UPDATE detalle_reserva SET observaciones = ? WHERE id_reserva = ?`,
-              [special_requests, reservationId]
-            )
-          }
-        } catch (columnError) {
-          console.log('⚠️  Columna observaciones no existe, ignorando...')
-        }
-      }
-
-      // 8. Obtener y devolver la reserva creada
+      // 7. Obtener y devolver la reserva creada
       const newReservation = await executeQuery(`
         SELECT 
           r.id_reserva, 
@@ -212,6 +193,91 @@ router.post(
   })
 )
 
+// 🔓 Ruta pública - Obtener servicios disponibles (CORREGIDO)
+router.get(
+  "/services",
+  asyncHandler(async (req, res) => {
+    try {
+      const services = await executeQuery(`
+        SELECT 
+          id_servicio,
+          nombre_servicio,
+          descripcion_servicio,
+          precio_servicio
+        FROM servicio
+        ORDER BY nombre_servicio
+      `)
+
+      res.json({
+        success: true,
+        services: services.map(service => ({
+          id: service.id_servicio.toString(),
+          name: service.nombre_servicio,
+          description: service.descripcion_servicio,
+          price: parseFloat(service.precio_servicio),
+          category: getCategoryFromService(service.nombre_servicio),
+          duration: getDurationFromService(service.nombre_servicio),
+          icon: getIconFromService(service.nombre_servicio),
+          isPopular: service.precio_servicio > 50000 || 
+                    service.nombre_servicio.toLowerCase().includes('masaje') || 
+                    service.nombre_servicio.toLowerCase().includes('cena')
+        }))
+      })
+    } catch (error) {
+      console.error('❌ Error en getAvailableServices:', error)
+      res.status(500).json({
+        success: false,
+        error: "Error al obtener servicios",
+        details: error.message
+      })
+    }
+  })
+)
+
+// Funciones helper para categorizar servicios
+function getCategoryFromService(name) {
+  const lowerName = name.toLowerCase()
+  
+  if (lowerName.includes('masaje') || lowerName.includes('spa')) return 'spa'
+  if (lowerName.includes('desayuno') || lowerName.includes('almuerzo') || lowerName.includes('cena')) return 'food'
+  if (lowerName.includes('transporte') || lowerName.includes('tour')) return 'transport'
+  if (lowerName.includes('limpieza') || lowerName.includes('lavandería') || lowerName.includes('lavanderia')) return 'housekeeping'
+  if (lowerName.includes('gimnasio') || lowerName.includes('piscina')) return 'fitness'
+  if (lowerName.includes('wifi')) return 'tech'
+  if (lowerName.includes('llamada')) return 'tech'
+  if (lowerName.includes('parqueadero')) return 'transport'
+  if (lowerName.includes('mascota')) return 'housekeeping'
+  
+  return 'other'
+}
+
+function getDurationFromService(name) {
+  const lowerName = name.toLowerCase()
+  
+  if (lowerName.includes('desayuno')) return '30 min'
+  if (lowerName.includes('almuerzo') || lowerName.includes('cena')) return '45 min'
+  if (lowerName.includes('masaje')) return '60 min'
+  if (lowerName.includes('transporte')) return '45 min'
+  if (lowerName.includes('tour')) return '3 horas'
+  if (lowerName.includes('gimnasio') || lowerName.includes('piscina')) return 'Todo el día'
+  if (lowerName.includes('wifi')) return '24/7'
+  
+  return 'Varía'
+}
+
+function getIconFromService(name) {
+  const lowerName = name.toLowerCase()
+  
+  if (lowerName.includes('masaje') || lowerName.includes('spa')) return 'spa'
+  if (lowerName.includes('desayuno') || lowerName.includes('almuerzo') || lowerName.includes('cena')) return 'utensils'
+  if (lowerName.includes('transporte') || lowerName.includes('tour') || lowerName.includes('parqueadero')) return 'car'
+  if (lowerName.includes('limpieza') || lowerName.includes('lavandería') || lowerName.includes('lavanderia') || lowerName.includes('mascota')) return 'users'
+  if (lowerName.includes('gimnasio') || lowerName.includes('piscina')) return 'dumbbell'
+  if (lowerName.includes('wifi') || lowerName.includes('llamada')) return 'wifi'
+  
+  return 'star'
+}
+
 // 🔓 Ruta pública - Verificar disponibilidad
 router.get(
   "/availability",
@@ -266,10 +332,11 @@ router.get(
         h.precio,
         h.estado_habitacion,
         h.capacidad,
-        h.descripcion,
-        h.servicios_incluidos,
+        dh.descripcion,
+        dh.servicios_incluidos,
         (DATEDIFF(?, ?) * h.precio) as total_nights_cost
       FROM habitacion h
+      LEFT JOIN detalles_habitacion dh ON h.id_habitacion = dh.id_habitacion
       ${whereClause}
       ORDER BY h.precio
     `
@@ -313,39 +380,6 @@ router.get(
       })
     } catch (error) {
       console.error('❌ Error en getRoomAvailability:', error)
-      throw error
-    }
-  })
-)
-
-// 🔓 Ruta pública - Obtener servicios disponibles
-router.get(
-  "/services",
-  asyncHandler(async (req, res) => {
-    try {
-      const services = await executeQuery(`
-        SELECT 
-          id_servicio,
-          nombre_servicio,
-          descripcion_servicio,
-          precio_servicio
-        FROM servicio
-        WHERE estado_servicio = 'Activo' OR estado_servicio IS NULL
-        ORDER BY nombre_servicio
-      `)
-
-      res.json({
-        success: true,
-        services: services.map(service => ({
-          id: service.id_servicio.toString(),
-          name: service.nombre_servicio,
-          description: service.descripcion_servicio,
-          price: parseFloat(service.precio_servicio),
-          category: service.categoria || 'General'
-        }))
-      })
-    } catch (error) {
-      console.error('❌ Error en getAvailableServices:', error)
       throw error
     }
   })
@@ -518,218 +552,6 @@ router.get(
         }))
       }
     })
-  })
-)
-
-// 🔓 Ruta pública simplificada para crear reserva
-router.post(
-  "/",
-  asyncHandler(async (req, res) => {
-    const { 
-      room_id, 
-      start_date, 
-      end_date,
-      services = [],
-      guests = 1,
-      total_price = 0,
-      special_requests = null,
-      nombre_cliente,
-      correo_cliente,
-      telefono_cliente
-    } = req.body
-
-    console.log('📝 Creando nueva reserva (pública):', { 
-      room_id, 
-      start_date, 
-      end_date, 
-      services, 
-      guests, 
-      total_price, 
-      special_requests,
-      nombre_cliente,
-      correo_cliente 
-    })
-
-    // Validar campos requeridos
-    if (!room_id || !start_date || !end_date || !nombre_cliente || !correo_cliente) {
-      return res.status(400).json({
-        success: false,
-        error: "Faltan campos requeridos: room_id, start_date, end_date, nombre_cliente, correo_cliente",
-        code: "MISSING_REQUIRED_FIELDS"
-      })
-    }
-
-    try {
-      // 1. Verificar disponibilidad de la habitación
-      const availabilityCheck = await executeQuery(`
-        SELECT COUNT(*) as count 
-        FROM reserva r 
-        WHERE r.id_habitacion = ? 
-        AND r.estado_reserva IN ('Confirmada', 'Pendiente')
-        AND (
-          (r.fecha_inicio <= ? AND r.fecha_fin > ?) OR
-          (r.fecha_inicio < ? AND r.fecha_fin >= ?) OR
-          (r.fecha_inicio >= ? AND r.fecha_fin <= ?)
-        )
-      `, [room_id, end_date, start_date, end_date, start_date, start_date, end_date])
-
-      if (availabilityCheck[0].count > 0) {
-        return res.status(400).json({
-          success: false,
-          error: "La habitación no está disponible en las fechas seleccionadas",
-          code: "ROOM_NOT_AVAILABLE"
-        })
-      }
-
-      // 2. Buscar o crear cliente
-      let client_id
-      
-      // Buscar cliente por email
-      const existingClient = await executeQuery(
-        "SELECT id_cliente FROM cliente WHERE correo_cliente = ?",
-        [correo_cliente]
-      )
-
-      if (existingClient.length > 0) {
-        client_id = existingClient[0].id_cliente
-        console.log('👤 Cliente existente encontrado:', client_id)
-        
-        // Actualizar datos del cliente
-        await executeQuery(`
-          UPDATE cliente 
-          SET nombre_cliente = ?, telefono_cliente = ?, fecha_actualizacion = NOW()
-          WHERE id_cliente = ?
-        `, [nombre_cliente, telefono_cliente || '', client_id])
-      } else {
-        // Crear nuevo cliente
-        console.log('👤 Creando nuevo cliente...')
-        const newClient = await executeQuery(`
-          INSERT INTO cliente (
-            nombre_cliente, 
-            apellido_cliente, 
-            correo_cliente, 
-            telefono_cliente, 
-            fecha_registro
-          ) VALUES (?, ?, ?, ?, NOW())
-        `, [nombre_cliente, '', correo_cliente, telefono_cliente || ''])
-        
-        client_id = newClient.insertId
-        console.log('✅ Nuevo cliente creado con ID:', client_id)
-      }
-
-      // 3. Crear reserva básica
-      const employee_id = 1 // Empleado por defecto
-      
-      await executeQuery(
-        "CALL crear_reserva_con_detalle(?, ?, ?, ?, ?)",
-        [client_id, employee_id, room_id, start_date, end_date]
-      )
-
-      // 4. Obtener el ID de la reserva
-      const lastReservation = await executeQuery(
-        "SELECT LAST_INSERT_ID() as reservation_id"
-      )
-      const reservationId = lastReservation[0].reservation_id
-
-      console.log('✅ Reserva creada con ID:', reservationId)
-
-      // 5. Agregar servicios si se proporcionaron
-      if (services && services.length > 0) {
-        for (const service of services) {
-          if (service.id_servicio) {
-            await executeQuery(
-              `INSERT INTO servicio_reserva (id_reserva, id_servicio, cantidad, precio_total) 
-               VALUES (?, ?, ?, ?)`,
-              [reservationId, service.id_servicio, service.cantidad || 1, service.precio_total || 0]
-            )
-          }
-        }
-      }
-
-      // 6. Actualizar el costo total si se proporcionó
-      if (total_price > 0) {
-        await executeQuery(
-          `UPDATE detalle_reserva SET costo_total = ? WHERE id_reserva = ?`,
-          [total_price, reservationId]
-        )
-      }
-
-      // 7. Si hay solicitudes especiales y la columna existe, guardarlas
-      if (special_requests) {
-        // Verificar si la columna 'observaciones' existe
-        try {
-          const columns = await executeQuery(`
-            SHOW COLUMNS FROM detalle_reserva LIKE 'observaciones'
-          `)
-          
-          if (columns.length > 0) {
-            await executeQuery(
-              `UPDATE detalle_reserva SET observaciones = ? WHERE id_reserva = ?`,
-              [special_requests, reservationId]
-            )
-          }
-        } catch (columnError) {
-          console.log('⚠️  Columna observaciones no existe, ignorando...')
-        }
-      }
-
-      // 8. Obtener y devolver la reserva creada
-      const newReservation = await executeQuery(`
-        SELECT 
-          r.id_reserva, 
-          r.fecha_reserva, 
-          r.fecha_inicio, 
-          r.fecha_fin, 
-          r.estado_reserva,
-          c.nombre_cliente, 
-          c.apellido_cliente,
-          c.correo_cliente,
-          h.numero_habitacion, 
-          h.tipo_habitacion,
-          h.precio,
-          dr.costo_total
-        FROM reserva r
-        JOIN cliente c ON r.id_cliente = c.id_cliente
-        JOIN habitacion h ON r.id_habitacion = h.id_habitacion
-        LEFT JOIN detalle_reserva dr ON r.id_reserva = dr.id_reserva
-        WHERE r.id_reserva = ?
-      `, [reservationId])
-
-      const reservationData = newReservation[0]
-
-      res.status(201).json({
-        success: true,
-        message: "¡Reserva creada exitosamente!",
-        reservation_id: reservationId,
-        reservation: {
-          id: reservationData.id_reserva.toString(),
-          booking_date: reservationData.fecha_reserva,
-          start_date: reservationData.fecha_inicio,
-          end_date: reservationData.fecha_fin,
-          status: reservationData.estado_reserva,
-          client: {
-            name: `${reservationData.nombre_cliente} ${reservationData.apellido_cliente || ''}`,
-            email: reservationData.correo_cliente
-          },
-          room: {
-            number: reservationData.numero_habitacion,
-            type: reservationData.tipo_habitacion,
-            price: reservationData.precio
-          },
-          details: {
-            total_cost: reservationData.costo_total
-          }
-        }
-      })
-
-    } catch (error) {
-      console.error('❌ Error al crear reserva:', error.message)
-      res.status(500).json({
-        success: false,
-        error: "Error interno del servidor al crear la reserva",
-        details: error.message
-      })
-    }
   })
 )
 

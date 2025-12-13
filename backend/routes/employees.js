@@ -18,7 +18,7 @@ router.get("/", authenticateToken, async (req, res) => {
         e.telefono_empleado,
         e.cargo_empleado,
         e.fecha_contratacion,
-        u.estado_usuario
+        COALESCE(u.estado_usuario, 'Activo') as estado_usuario
       FROM empleado e
       LEFT JOIN usuario u ON e.correo_empleado = u.correo_usuario
       ORDER BY e.id_empleado
@@ -35,7 +35,8 @@ router.get("/", authenticateToken, async (req, res) => {
     console.error('❌ Error fetching employees:', error)
     res.status(500).json({
       success: false,
-      message: 'Error interno del servidor al obtener empleados'
+      message: 'Error interno del servidor al obtener empleados',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     })
   }
 })
@@ -54,7 +55,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
         e.telefono_empleado,
         e.cargo_empleado,
         e.fecha_contratacion,
-        u.estado_usuario
+        COALESCE(u.estado_usuario, 'Activo') as estado_usuario
       FROM empleado e
       LEFT JOIN usuario u ON e.correo_empleado = u.correo_usuario
       WHERE e.id_empleado = ?
@@ -76,13 +77,15 @@ router.get("/:id", authenticateToken, async (req, res) => {
     console.error('❌ Error fetching employee:', error)
     res.status(500).json({
       success: false,
-      message: 'Error interno del servidor al obtener el empleado'
+      message: 'Error interno del servidor al obtener el empleado',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     })
   }
 })
 
 // POST /api/employees - Crear nuevo empleado
 router.post("/", authenticateToken, async (req, res) => {
+  let connection
   try {
     const {
       nombre_empleado,
@@ -94,6 +97,8 @@ router.post("/", authenticateToken, async (req, res) => {
       contraseña
     } = req.body
 
+    console.log('📝 Creating employee with data:', req.body)
+
     // Validaciones básicas
     if (!nombre_empleado || !apellido_empleado || !correo_empleado || !cargo_empleado) {
       return res.status(400).json({
@@ -102,34 +107,65 @@ router.post("/", authenticateToken, async (req, res) => {
       })
     }
 
-    // Verificar si el correo ya existe
-    const [existingUsers] = await db.execute(
-      'SELECT * FROM usuario WHERE correo_usuario = ?',
-      [correo_empleado]
-    )
-
-    if (existingUsers.length > 0) {
+    // Validar email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(correo_empleado)) {
       return res.status(400).json({
         success: false,
-        message: 'Ya existe un usuario con este correo electrónico'
+        message: 'Formato de correo electrónico inválido'
       })
     }
 
+    // Obtener conexión del pool
+    connection = await db.getConnection()
+
     // Iniciar transacción
-    await db.execute('START TRANSACTION')
+    await connection.beginTransaction()
 
     try {
-      // 1. Crear usuario primero
+      // 1. Verificar si el correo ya existe en usuario
+      const [existingUsers] = await connection.execute(
+        'SELECT * FROM usuario WHERE correo_usuario = ?',
+        [correo_empleado]
+      )
+
+      if (existingUsers.length > 0) {
+        await connection.rollback()
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un usuario con este correo electrónico'
+        })
+      }
+
+      // 2. Verificar si el correo ya existe en empleado
+      const [existingEmployees] = await connection.execute(
+        'SELECT * FROM empleado WHERE correo_empleado = ?',
+        [correo_empleado]
+      )
+
+      if (existingEmployees.length > 0) {
+        await connection.rollback()
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un empleado con este correo electrónico'
+        })
+      }
+
+      // 3. Crear usuario primero
       const passwordToStore = contraseña ? contraseña.substring(0, 4) : '1234'
       
-      const [userResult] = await db.execute(
+      console.log('Creating user with password:', passwordToStore)
+      
+      const [userResult] = await connection.execute(
         `INSERT INTO usuario (correo_usuario, usuario_acceso, contraseña_usuario, estado_usuario, fecha_registro) 
          VALUES (?, 'Empleado', ?, 'Activo', NOW())`,
         [correo_empleado, passwordToStore]
       )
 
-      // 2. Crear empleado
-      const [employeeResult] = await db.execute(
+      console.log('User created with ID:', userResult.insertId)
+
+      // 4. Crear empleado
+      const [employeeResult] = await connection.execute(
         `INSERT INTO empleado (nombre_empleado, apellido_empleado, correo_empleado, telefono_empleado, cargo_empleado, fecha_contratacion) 
          VALUES (?, ?, ?, ?, ?, ?)`,
         [
@@ -138,11 +174,14 @@ router.post("/", authenticateToken, async (req, res) => {
           correo_empleado,
           telefono_empleado || null,
           cargo_empleado,
-          fecha_contratacion || new Date()
+          fecha_contratacion || new Date().toISOString().split('T')[0]
         ]
       )
 
-      await db.execute('COMMIT')
+      console.log('Employee created with ID:', employeeResult.insertId)
+
+      // Confirmar transacción
+      await connection.commit()
 
       // Obtener el empleado creado
       const [newEmployee] = await db.execute(`
@@ -154,7 +193,7 @@ router.post("/", authenticateToken, async (req, res) => {
           e.telefono_empleado,
           e.cargo_empleado,
           e.fecha_contratacion,
-          u.estado_usuario
+          COALESCE(u.estado_usuario, 'Activo') as estado_usuario
         FROM empleado e
         LEFT JOIN usuario u ON e.correo_empleado = u.correo_usuario
         WHERE e.id_empleado = ?
@@ -167,7 +206,8 @@ router.post("/", authenticateToken, async (req, res) => {
       })
 
     } catch (error) {
-      await db.execute('ROLLBACK')
+      await connection.rollback()
+      console.error('❌ Transaction error:', error)
       throw error
     }
 
@@ -175,8 +215,13 @@ router.post("/", authenticateToken, async (req, res) => {
     console.error('❌ Error creating employee:', error)
     res.status(500).json({
       success: false,
-      message: 'Error interno del servidor al crear el empleado'
+      message: 'Error interno del servidor al crear el empleado',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     })
+  } finally {
+    if (connection) {
+      connection.release()
+    }
   }
 })
 
@@ -191,6 +236,8 @@ router.put("/:id", authenticateToken, async (req, res) => {
       cargo_empleado,
       fecha_contratacion
     } = req.body
+
+    console.log('📝 Updating employee:', id, req.body)
 
     // Verificar que el empleado existe
     const [existingEmployees] = await db.execute(
@@ -213,9 +260,9 @@ router.put("/:id", authenticateToken, async (req, res) => {
       [
         nombre_empleado,
         apellido_empleado,
-        telefono_empleado,
+        telefono_empleado || null,
         cargo_empleado,
-        fecha_contratacion,
+        fecha_contratacion || new Date().toISOString().split('T')[0],
         id
       ]
     )
@@ -230,7 +277,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
         e.telefono_empleado,
         e.cargo_empleado,
         e.fecha_contratacion,
-        u.estado_usuario
+        COALESCE(u.estado_usuario, 'Activo') as estado_usuario
       FROM empleado e
       LEFT JOIN usuario u ON e.correo_empleado = u.correo_usuario
       WHERE e.id_empleado = ?
@@ -246,15 +293,19 @@ router.put("/:id", authenticateToken, async (req, res) => {
     console.error('❌ Error updating employee:', error)
     res.status(500).json({
       success: false,
-      message: 'Error interno del servidor al actualizar el empleado'
+      message: 'Error interno del servidor al actualizar el empleado',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     })
   }
 })
 
 // DELETE /api/employees/:id - Eliminar empleado
 router.delete("/:id", authenticateToken, async (req, res) => {
+  let connection
   try {
     const { id } = req.params
+
+    console.log('🗑️ Deleting employee:', id)
 
     // Verificar que el empleado existe
     const [existingEmployees] = await db.execute(
@@ -271,25 +322,35 @@ router.delete("/:id", authenticateToken, async (req, res) => {
 
     const employee = existingEmployees[0]
 
+    // Obtener conexión del pool
+    connection = await db.getConnection()
+
     // Iniciar transacción
-    await db.execute('START TRANSACTION')
+    await connection.beginTransaction()
 
     try {
-      // 1. Eliminar empleado
-      await db.execute('DELETE FROM empleado WHERE id_empleado = ?', [id])
-
-      // 2. Eliminar usuario (si no está siendo usado en otras tablas)
-      // Primero verificamos si el correo está siendo usado en otras tablas
-      const [reservas] = await db.execute(
+      // 1. Verificar si el empleado tiene reservas asociadas
+      const [reservas] = await connection.execute(
         'SELECT COUNT(*) as count FROM reserva WHERE id_empleado = ?',
         [id]
       )
 
-      if (reservas[0].count === 0) {
-        await db.execute('DELETE FROM usuario WHERE correo_usuario = ?', [employee.correo_empleado])
+      if (reservas[0].count > 0) {
+        await connection.rollback()
+        return res.status(400).json({
+          success: false,
+          message: 'No se puede eliminar el empleado porque tiene reservas asociadas'
+        })
       }
 
-      await db.execute('COMMIT')
+      // 2. Eliminar empleado
+      await connection.execute('DELETE FROM empleado WHERE id_empleado = ?', [id])
+
+      // 3. Eliminar usuario asociado
+      await connection.execute('DELETE FROM usuario WHERE correo_usuario = ?', [employee.correo_empleado])
+
+      // Confirmar transacción
+      await connection.commit()
 
       res.json({
         success: true,
@@ -297,7 +358,8 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       })
 
     } catch (error) {
-      await db.execute('ROLLBACK')
+      await connection.rollback()
+      console.error('❌ Transaction error:', error)
       throw error
     }
 
@@ -305,8 +367,13 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     console.error('❌ Error deleting employee:', error)
     res.status(500).json({
       success: false,
-      message: 'Error interno del servidor al eliminar el empleado'
+      message: 'Error interno del servidor al eliminar el empleado',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     })
+  } finally {
+    if (connection) {
+      connection.release()
+    }
   }
 })
 
@@ -315,6 +382,8 @@ router.patch("/:id/status", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params
     const { status } = req.body
+
+    console.log('🔄 Updating employee status:', id, status)
 
     if (!status || !['Activo', 'Inactivo'].includes(status)) {
       return res.status(400).json({
@@ -338,11 +407,26 @@ router.patch("/:id/status", authenticateToken, async (req, res) => {
 
     const employee = existingEmployees[0]
 
-    // Actualizar estado en la tabla usuario
-    await db.execute(
-      'UPDATE usuario SET estado_usuario = ? WHERE correo_usuario = ?',
-      [status, employee.correo_empleado]
+    // Verificar si el usuario existe
+    const [existingUsers] = await db.execute(
+      'SELECT * FROM usuario WHERE correo_usuario = ?',
+      [employee.correo_empleado]
     )
+
+    if (existingUsers.length === 0) {
+      // Crear usuario si no existe
+      await db.execute(
+        `INSERT INTO usuario (correo_usuario, usuario_acceso, contraseña_usuario, estado_usuario, fecha_registro) 
+         VALUES (?, 'Empleado', '1234', ?, NOW())`,
+        [employee.correo_empleado, status]
+      )
+    } else {
+      // Actualizar estado en la tabla usuario
+      await db.execute(
+        'UPDATE usuario SET estado_usuario = ? WHERE correo_usuario = ?',
+        [status, employee.correo_empleado]
+      )
+    }
 
     res.json({
       success: true,
@@ -353,7 +437,8 @@ router.patch("/:id/status", authenticateToken, async (req, res) => {
     console.error('❌ Error updating employee status:', error)
     res.status(500).json({
       success: false,
-      message: 'Error interno del servidor al actualizar el estado'
+      message: 'Error interno del servidor al actualizar el estado',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     })
   }
 })

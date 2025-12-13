@@ -26,7 +26,11 @@ import {
   Dumbbell,
   Film,
   Bed,
-  MapPin
+  MapPin,
+  Plus,
+  Minus,
+  Gift,
+  Sparkles
 } from 'lucide-react'
 import { getRooms, getAvailableServices } from '../../services/api'
 import { format, addDays, differenceInDays, isValid } from 'date-fns'
@@ -56,8 +60,7 @@ const Booking = () => {
   const [viewMode, setViewMode] = useState("list") // "list" o "cinema"
   const [selectedServices, setSelectedServices] = useState([])
   const [availableServices, setAvailableServices] = useState([])
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
-  const [successMessage, setSuccessMessage] = useState("")
+  const [showServicesModal, setShowServicesModal] = useState(false)
   const [selectedRoomDetails, setSelectedRoomDetails] = useState(null)
   const [showRoomDetails, setShowRoomDetails] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -126,15 +129,19 @@ const Booking = () => {
     ]
   }
 
-  // Función para mostrar mensajes temporales
-  const showMessage = (message, type = 'success') => {
-    setSuccessMessage(message)
-    setShowSuccessMessage(true)
-    setTimeout(() => {
-      setShowSuccessMessage(false)
-      setSuccessMessage("")
-    }, 3000)
-  }
+  // Cargar servicios disponibles
+  useEffect(() => {
+    async function loadServices() {
+      try {
+        const services = await getAvailableServices()
+        setAvailableServices(services)
+      } catch (error) {
+        console.error('Error loading services:', error)
+      }
+    }
+    
+    loadServices()
+  }, [])
 
   // Función para cambiar slide de una habitación específica
   const changeRoomSlide = (roomId, direction) => {
@@ -278,20 +285,6 @@ const Booking = () => {
     }
 
     loadRooms()
-  }, [])
-
-  // Cargar servicios disponibles
-  useEffect(() => {
-    async function loadServices() {
-      try {
-        const services = await getAvailableServices()
-        setAvailableServices(services)
-      } catch (error) {
-        console.error('Error loading services:', error)
-      }
-    }
-    
-    loadServices()
   }, [])
 
   // Aplicar filtros cuando cambien los criterios
@@ -491,11 +484,8 @@ const Booking = () => {
           serviceFee: serviceFee,
           total: total,
         }))
-        
-        showMessage(`Habitación "${room.name}" seleccionada`)
       } catch (err) {
         console.error("Error selecting room:", err)
-        showMessage('Error al seleccionar la habitación', 'error')
       }
     },
     [formData.checkIn, formData.checkOut, promoApplied, roomSlides],
@@ -534,7 +524,6 @@ const Booking = () => {
       })
 
       setError(null)
-      showMessage('¡Código promocional aplicado! 15% de descuento.')
     } else {
       setError("Código promocional inválido. Intente con HOTEL15")
     }
@@ -626,191 +615,170 @@ const Booking = () => {
     window.scrollTo(0, 0)
   }, [])
 
-  // FUNCIÓN PARA ENVIAR RESERVA
-  const submitBooking = useCallback(async () => {
-    if (!validateStep(3)) {
+  // Manejar servicios
+  const handleAddService = (service) => {
+    setSelectedServices(prev => {
+      const existing = prev.find(s => s.id === service.id)
+      if (existing) {
+        return prev.map(s => 
+          s.id === service.id 
+            ? { ...s, cantidad: (s.cantidad || 1) + 1 } 
+            : s
+        )
+      } else {
+        return [...prev, { ...service, cantidad: 1 }]
+      }
+    })
+  }
+
+  const handleRemoveService = (serviceId) => {
+    setSelectedServices(prev => prev.filter(s => s.id !== serviceId))
+  }
+
+  const handleUpdateServiceQuantity = (serviceId, newQuantity) => {
+    if (newQuantity < 1) {
+      handleRemoveService(serviceId)
       return
     }
+    
+    setSelectedServices(prev => 
+      prev.map(s => 
+        s.id === serviceId 
+          ? { ...s, cantidad: newQuantity } 
+          : s
+      )
+    )
+  }
 
-    setIsLoading(true)
-    setError(null)
+  const calculateServicesTotal = () => {
+    return selectedServices.reduce((total, service) => {
+      return total + (service.price * (service.cantidad || 1))
+    }, 0)
+  }
 
-    try {
-      console.log('📝 Starting booking process...')
-
-      // Preparar datos de la reserva
-      const reservationData = {
-        room_id: formData.roomId ? parseInt(formData.roomId) : null,
-        start_date: formData.checkIn || null,
-        end_date: formData.checkOut || null,
-        services: selectedServices.map(service => ({
-          id_servicio: service.id ? parseInt(service.id) : null,
-          cantidad: service.cantidad ? parseInt(service.cantidad.toString()) : 1,
-          precio_total: service.price ? parseFloat(service.price.toString()) * (service.cantidad || 1) : 0
-        })).filter(service => service.id_servicio !== null),
-        guests: formData.guests ? parseInt(formData.guests.toString()) : 1,
-        total_price: formData.total ? parseFloat(formData.total.toString()) : 0,
-        special_requests: formData.specialRequests || null,
-        nombre_cliente: formData.name || null,
-        correo_cliente: formData.email || null,
-        telefono_cliente: formData.phone || null
-      }
-
-      // Validación adicional
-      if (!reservationData.room_id || isNaN(reservationData.room_id)) {
-        throw new Error('ID de habitación no válido')
-      }
-      
-      if (!reservationData.start_date || !reservationData.end_date) {
-        throw new Error('Fechas de reserva no válidas')
-      }
-
-      // Validar fechas
-      const startDate = new Date(reservationData.start_date)
-      const endDate = new Date(reservationData.end_date)
-      
-      if (!isValid(startDate) || !isValid(endDate)) {
-        throw new Error('Las fechas seleccionadas no son válidas')
-      }
-
-      if (startDate >= endDate) {
-        throw new Error('La fecha de salida debe ser posterior a la fecha de entrada')
-      }
-
-      console.log('📦 Final reservation data to send:', reservationData)
-
-      // USAR LA RUTA PÚBLICA
-      const response = await fetch('http://localhost:5000/api/reservations/public', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(reservationData),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Error ${response.status}: ${errorText}`)
-      }
-
-      const result = await response.json()
-      console.log('✅ Reservation created:', result)
-
-      setBookingId(result.reservation_id || result.id || `RES-${Date.now()}`)
-      setBookingComplete(true)
-
-      // Mostrar mensaje de éxito
-      showMessage('¡Reserva creada exitosamente!')
-
-    } catch (error) {
-      console.error('❌ Error creating reservation:', error)
-      setError(`Error al crear la reserva: ${error.message}`)
-      
-      // Mostrar mensaje de error
-      showMessage(`Error: ${error.message}`, 'error')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [formData, selectedServices, validateStep])
-
-  // Componente para el modo cine simplificado - SIN "Vista de Asientos"
-  const CinemaView = () => {
-    // Organizar en filas de 5 habitaciones cada una
-    const rows = []
-    for (let i = 0; i < filteredRooms.length; i += 5) {
-      rows.push(filteredRooms.slice(i, i + 5))
-    }
-
-    const handleSeatClick = (room) => {
-      handleRoomSelect(room)
-    }
-
-    const getSeatColor = (room) => {
-      if (formData.roomId === room.id) return 'bg-red-500 border-red-600 hover:bg-red-600 text-white'
-      return 'bg-green-500 border-green-600 hover:bg-green-600 text-white'
-    }
-
+  // Componente para el modal de selección de servicios
+  const ServicesModal = () => {
     return (
-      <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-        {/* Título cambiado: Solo icono de cama */}
-        <div className="flex items-center justify-center mb-8">
-          <Bed className="h-8 w-8 text-gray-700 mr-3" />
-          <h3 className="text-2xl font-bold text-gray-900">Selección de Habitaciones</h3>
-        </div>
-
-        {/* Asientos (Habitaciones) */}
-        <div className="space-y-8">
-          {rows.map((row, rowIndex) => (
-            <div key={rowIndex} className="flex justify-center space-x-4">
-              {row.map((room, seatIndex) => (
-                <div 
-                  key={room.id} 
-                  className="relative"
-                >
-                  <button
-                    onClick={() => handleSeatClick(room)}
-                    className={`
-                      w-20 h-20 rounded-lg border-2 flex flex-col items-center justify-center p-2
-                      transition-all duration-200 transform hover:scale-105 shadow-md
-                      ${getSeatColor(room)}
-                      cursor-pointer
-                    `}
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center p-6 border-b">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Servicios Adicionales</h3>
+              <p className="text-gray-600 mt-1">Personaliza tu experiencia</p>
+            </div>
+            <button 
+              onClick={() => setShowServicesModal(false)}
+              className="text-gray-500 hover:text-gray-700 text-xl"
+            >
+              ✕
+            </button>
+          </div>
+          
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {availableServices.map((service) => {
+                const isSelected = selectedServices.find(s => s.id === service.id)
+                const quantity = isSelected ? isSelected.cantidad || 1 : 0
+                
+                return (
+                  <div 
+                    key={service.id}
+                    className={`p-4 rounded-lg border ${
+                      isSelected 
+                        ? 'border-primary-500 bg-blue-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
                   >
-                    <div className="text-center font-bold">
-                      <div className="text-xl">{room.number}</div>
+                    <div className="flex items-start mb-3">
+                      <div className={`p-2 rounded ${isSelected ? 'bg-primary-100' : 'bg-gray-100'}`}>
+                        <Gift className="h-5 w-5" />
+                      </div>
+                      <div className="ml-3 flex-1">
+                        <h4 className="font-semibold text-gray-900">{service.name}</h4>
+                        <p className="text-sm text-gray-600 mt-1">{service.description}</p>
+                      </div>
                     </div>
-                  </button>
-
-                  {/* Info adicional */}
-                  <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-center text-xs text-gray-600 whitespace-nowrap">
-                    ${room.price.toLocaleString()}
+                    
+                    <div className="flex justify-between items-center mt-4">
+                      <div>
+                        <span className="text-lg font-bold text-primary-600">
+                          ${parseFloat(service.price).toLocaleString()}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        {isSelected ? (
+                          <>
+                            <div className="flex items-center bg-gray-100 rounded">
+                              <button
+                                onClick={() => handleUpdateServiceQuantity(service.id, quantity - 1)}
+                                className="p-2 hover:bg-gray-200"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span className="font-medium w-8 text-center">{quantity}</span>
+                              <button
+                                onClick={() => handleUpdateServiceQuantity(service.id, quantity + 1)}
+                                className="p-2 hover:bg-gray-200"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveService(service.id)}
+                              className="ml-2 px-3 py-2 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                            >
+                              Eliminar
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleAddService(service)}
+                            className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+                          >
+                            Agregar
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
-          ))}
-        </div>
-
-        {/* Leyenda simplificada */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-white rounded-lg border">
-          <div className="flex items-center justify-center">
-            <div className="w-6 h-6 bg-green-500 border border-green-600 rounded mr-2"></div>
-            <div className="text-gray-700">
-              <span className="font-medium">Verde:</span> Habitación disponible
-            </div>
-          </div>
-          <div className="flex items-center justify-center">
-            <div className="w-6 h-6 bg-red-500 border border-red-600 rounded mr-2"></div>
-            <div className="text-gray-700">
-              <span className="font-medium">Rojo:</span> Habitación seleccionada
-            </div>
-          </div>
-        </div>
-
-        {/* Información de la habitación seleccionada */}
-        {formData.roomId && (
-          <div className="mt-8 p-6 bg-white rounded-lg border border-gray-200">
-            <h4 className="text-gray-900 font-semibold text-lg mb-4">Habitación Seleccionada:</h4>
-            <div className="flex items-center">
-              <div className="w-20 h-20 bg-red-100 rounded-lg mr-4 flex items-center justify-center">
-                <span className="text-red-600 text-3xl font-bold">
-                  {availableRooms.find(r => r.id === formData.roomId)?.number || ''}
-                </span>
+            
+            {availableServices.length === 0 && (
+              <div className="text-center py-8">
+                <Sparkles className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No hay servicios disponibles en este momento</p>
               </div>
-              <div className="flex-1">
-                <p className="text-gray-900 font-medium text-lg">{formData.roomName}</p>
-                <p className="text-gray-600">${formData.price.toLocaleString()}/noche</p>
-                <p className="text-gray-500 text-sm">{formData.nights} noches</p>
+            )}
+          </div>
+          
+          <div className="p-6 border-t bg-gray-50">
+            <div className="flex justify-between items-center">
+              <div>
+                <h4 className="font-semibold text-gray-900">Resumen de servicios:</h4>
+                <p className="text-sm text-gray-600">
+                  {selectedServices.length} servicio(s) seleccionados • Total: <span className="font-bold text-primary-600">${calculateServicesTotal().toLocaleString()}</span>
+                </p>
               </div>
-              <button
-                onClick={() => setFormData(prev => ({ ...prev, roomId: "" }))}
-                className="text-gray-500 hover:text-gray-700 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cambiar
-              </button>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowServicesModal(false)}
+                  className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => setShowServicesModal(false)}
+                  className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+                >
+                  Aceptar Servicios
+                </button>
+              </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
     )
   }
@@ -969,6 +937,189 @@ const Booking = () => {
     )
   }
 
+  // Componente para el modo cine simplificado - SIN "Vista de Asientos"
+  const CinemaView = () => {
+    // Organizar en filas de 5 habitaciones cada una
+    const rows = []
+    for (let i = 0; i < filteredRooms.length; i += 5) {
+      rows.push(filteredRooms.slice(i, i + 5))
+    }
+
+    const handleSeatClick = (room) => {
+      handleRoomSelect(room)
+    }
+
+    const getSeatColor = (room) => {
+      if (formData.roomId === room.id) return 'bg-red-500 border-red-600 hover:bg-red-600 text-white'
+      return 'bg-green-500 border-green-600 hover:bg-green-600 text-white'
+    }
+
+    return (
+      <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+        {/* Título cambiado: Solo icono de cama */}
+        <div className="flex items-center justify-center mb-8">
+          <Bed className="h-8 w-8 text-gray-700 mr-3" />
+          <h3 className="text-2xl font-bold text-gray-900">Selección de Habitaciones</h3>
+        </div>
+
+        {/* Asientos (Habitaciones) */}
+        <div className="space-y-8">
+          {rows.map((row, rowIndex) => (
+            <div key={rowIndex} className="flex justify-center space-x-4">
+              {row.map((room, seatIndex) => (
+                <div 
+                  key={room.id} 
+                  className="relative"
+                >
+                  <button
+                    onClick={() => handleSeatClick(room)}
+                    className={`
+                      w-20 h-20 rounded-lg border-2 flex flex-col items-center justify-center p-2
+                      transition-all duration-200 transform hover:scale-105 shadow-md
+                      ${getSeatColor(room)}
+                      cursor-pointer
+                    `}
+                  >
+                    <div className="text-center font-bold">
+                      <div className="text-xl">{room.number}</div>
+                    </div>
+                  </button>
+
+                  {/* Info adicional */}
+                  <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-center text-xs text-gray-600 whitespace-nowrap">
+                    ${room.price.toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Leyenda simplificada */}
+        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-white rounded-lg border">
+          <div className="flex items-center justify-center">
+            <div className="w-6 h-6 bg-green-500 border border-green-600 rounded mr-2"></div>
+            <div className="text-gray-700">
+              <span className="font-medium">Verde:</span> Habitación disponible
+            </div>
+          </div>
+          <div className="flex items-center justify-center">
+            <div className="w-6 h-6 bg-red-500 border border-red-600 rounded mr-2"></div>
+            <div className="text-gray-700">
+              <span className="font-medium">Rojo:</span> Habitación seleccionada
+            </div>
+          </div>
+        </div>
+
+        {/* Información de la habitación seleccionada */}
+        {formData.roomId && (
+          <div className="mt-8 p-6 bg-white rounded-lg border border-gray-200">
+            <h4 className="text-gray-900 font-semibold text-lg mb-4">Habitación Seleccionada:</h4>
+            <div className="flex items-center">
+              <div className="w-20 h-20 bg-red-100 rounded-lg mr-4 flex items-center justify-center">
+                <span className="text-red-600 text-3xl font-bold">
+                  {availableRooms.find(r => r.id === formData.roomId)?.number || ''}
+                </span>
+              </div>
+              <div className="flex-1">
+                <p className="text-gray-900 font-medium text-lg">{formData.roomName}</p>
+                <p className="text-gray-600">${formData.price.toLocaleString()}/noche</p>
+                <p className="text-gray-500 text-sm">{formData.nights} noches</p>
+              </div>
+              <button
+                onClick={() => setFormData(prev => ({ ...prev, roomId: "" }))}
+                className="text-gray-500 hover:text-gray-700 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cambiar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // FUNCIÓN PARA ENVIAR RESERVA
+  const submitBooking = useCallback(async () => {
+    if (!validateStep(3)) {
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      console.log('📝 Starting booking process...')
+
+      // Preparar datos de la reserva
+      const reservationData = {
+        room_id: formData.roomId ? parseInt(formData.roomId) : null,
+        start_date: formData.checkIn || null,
+        end_date: formData.checkOut || null,
+        services: selectedServices.map(service => ({
+          id_servicio: service.id ? parseInt(service.id) : null,
+          cantidad: service.cantidad ? parseInt(service.cantidad.toString()) : 1,
+          precio_total: service.price ? parseFloat(service.price.toString()) * (service.cantidad || 1) : 0
+        })).filter(service => service.id_servicio !== null),
+        guests: formData.guests ? parseInt(formData.guests.toString()) : 1,
+        total_price: formData.total ? parseFloat(formData.total.toString()) : 0,
+        special_requests: formData.specialRequests || null,
+        nombre_cliente: formData.name || null,
+        correo_cliente: formData.email || null,
+        telefono_cliente: formData.phone || null
+      }
+
+      // Validación adicional
+      if (!reservationData.room_id || isNaN(reservationData.room_id)) {
+        throw new Error('ID de habitación no válido')
+      }
+      
+      if (!reservationData.start_date || !reservationData.end_date) {
+        throw new Error('Fechas de reserva no válidas')
+      }
+
+      // Validar fechas
+      const startDate = new Date(reservationData.start_date)
+      const endDate = new Date(reservationData.end_date)
+      
+      if (!isValid(startDate) || !isValid(endDate)) {
+        throw new Error('Las fechas seleccionadas no son válidas')
+      }
+
+      if (startDate >= endDate) {
+        throw new Error('La fecha de salida debe ser posterior a la fecha de entrada')
+      }
+
+      console.log('📦 Final reservation data to send:', reservationData)
+
+      // USAR LA RUTA PÚBLICA
+      const response = await fetch('http://localhost:5000/api/reservations/public', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(reservationData),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Error ${response.status}: ${errorText}`)
+      }
+
+      const result = await response.json()
+      console.log('✅ Reservation created:', result)
+
+      setBookingId(result.reservation_id || result.id || `RES-${Date.now()}`)
+      setBookingComplete(true)
+
+    } catch (error) {
+      console.error('❌ Error creating reservation:', error)
+      setError(`Error al crear la reserva: ${error.message}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [formData, selectedServices, validateStep])
+
   // Renderizar confirmación de reserva
   if (bookingComplete) {
     return (
@@ -1060,7 +1211,8 @@ const Booking = () => {
               )}
               <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2">
                 <span>Total</span>
-                <span>${formData.total.toFixed(2)}</span>
+                <span>${(formData.total + selectedServices.reduce((total, service) => 
+                  total + (service.price * (service.cantidad || 1)), 0)).toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -1126,19 +1278,8 @@ const Booking = () => {
 
   return (
     <div className="py-16 bg-gray-50 min-h-screen">
-      {/* Mensaje de éxito flotante */}
-      {showSuccessMessage && (
-        <div className="fixed top-4 right-4 z-50 animate-fade-in-down">
-          <div className="bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg">
-            <div className="flex items-center">
-              <Check className="h-5 w-5 mr-2" />
-              <span>{successMessage}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de detalles de habitación */}
+      {/* Modales */}
+      {showServicesModal && <ServicesModal />}
       {showRoomDetails && <RoomDetailsModal />}
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1598,36 +1739,100 @@ const Booking = () => {
               </div>
 
               {formData.roomId && (
-                <div className="bg-gray-50 p-6 rounded-xl mb-6 border border-gray-200">
-                  <h3 className="font-semibold mb-4 text-gray-900">Habitación Seleccionada</h3>
-                  <div className="flex items-center">
-                    <div className="w-20 h-20 mr-4 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
-                      {formData.roomImage ? (
-                        <img 
-                          src={formData.roomImage} 
-                          alt={formData.roomName}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <Bed className="h-8 w-8 text-gray-400" />
-                      )}
+                <>
+                  {/* Panel de servicios */}
+                  <div className="mb-8">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Servicios Adicionales</h3>
+                      <button
+                        onClick={() => setShowServicesModal(true)}
+                        className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Agregar servicios
+                      </button>
                     </div>
-                    <div className="flex-1">
-                      <p className="font-medium text-lg text-gray-900">{formData.roomName}</p>
-                      <p className="text-sm text-gray-600">
-                        {formData.nights} {formData.nights === 1 ? "noche" : "noches"} x ${formData.price.toLocaleString()} = $
-                        {formData.subtotal.toFixed(2)}
-                      </p>
-                      <p className="text-sm text-gray-500">Número: {availableRooms.find(r => r.id === formData.roomId)?.number}</p>
-                    </div>
-                    <button
-                      onClick={() => setFormData(prev => ({ ...prev, roomId: "" }))}
-                      className="text-red-600 hover:text-red-800 font-medium"
-                    >
-                      Cambiar
-                    </button>
+                    
+                    {selectedServices.length > 0 ? (
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 className="font-medium mb-3">Servicios seleccionados:</h4>
+                        <div className="space-y-3">
+                          {selectedServices.map((service) => (
+                            <div key={service.id} className="flex justify-between items-center p-3 bg-white rounded border">
+                              <div>
+                                <span className="font-medium">{service.name}</span>
+                                <div className="text-sm text-gray-600">
+                                  ${service.price.toLocaleString()} × {service.cantidad || 1}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <div className="flex items-center bg-gray-100 rounded">
+                                  <button
+                                    onClick={() => handleUpdateServiceQuantity(service.id, (service.cantidad || 1) - 1)}
+                                    className="p-2 hover:bg-gray-200"
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                  </button>
+                                  <span className="font-medium w-8 text-center">{service.cantidad || 1}</span>
+                                  <button
+                                    onClick={() => handleUpdateServiceQuantity(service.id, (service.cantidad || 1) + 1)}
+                                    className="p-2 hover:bg-gray-200"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </button>
+                                </div>
+                                <span className="font-medium">
+                                  ${(service.price * (service.cantidad || 1)).toLocaleString()}
+                                </span>
+                                <button
+                                  onClick={() => handleRemoveService(service.id)}
+                                  className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 text-center">
+                        <p className="text-gray-600">No hay servicios seleccionados</p>
+                      </div>
+                    )}
                   </div>
-                </div>
+
+                  <div className="bg-gray-50 p-6 rounded-xl mb-6 border border-gray-200">
+                    <h3 className="font-semibold mb-4 text-gray-900">Habitación Seleccionada</h3>
+                    <div className="flex items-center">
+                      <div className="w-20 h-20 mr-4 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
+                        {formData.roomImage ? (
+                          <img 
+                            src={formData.roomImage} 
+                            alt={formData.roomName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Bed className="h-8 w-8 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-lg text-gray-900">{formData.roomName}</p>
+                        <p className="text-sm text-gray-600">
+                          {formData.nights} {formData.nights === 1 ? "noche" : "noches"} x ${formData.price.toLocaleString()} = $
+                          {formData.subtotal.toFixed(2)}
+                        </p>
+                        <p className="text-sm text-gray-500">Número: {availableRooms.find(r => r.id === formData.roomId)?.number}</p>
+                      </div>
+                      <button
+                        onClick={() => setFormData(prev => ({ ...prev, roomId: "" }))}
+                        className="text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Cambiar
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
 
               {/* Código promocional */}
@@ -1750,9 +1955,17 @@ const Booking = () => {
                       <span className="text-gray-600">Tarifa de servicio</span>
                       <span className="font-medium">${formData.serviceFee.toFixed(2)}</span>
                     </div>
+                    {selectedServices.length > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Servicios adicionales</span>
+                        <span className="font-medium">${selectedServices.reduce((total, service) => 
+                          total + (service.price * (service.cantidad || 1)), 0).toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2">
                       <span>Total</span>
-                      <span>${formData.total.toFixed(2)}</span>
+                      <span>${(formData.total + selectedServices.reduce((total, service) => 
+                        total + (service.price * (service.cantidad || 1)), 0)).toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -2067,7 +2280,8 @@ const Booking = () => {
                     <div className="border-t pt-4">
                       <div className="flex justify-between text-lg font-bold">
                         <span className="text-gray-900">Total a Pagar</span>
-                        <span className="text-primary-600">${formData.total.toFixed(2)}</span>
+                        <span className="text-primary-600">${(formData.total + selectedServices.reduce((total, service) => 
+                          total + (service.price * (service.cantidad || 1)), 0)).toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
