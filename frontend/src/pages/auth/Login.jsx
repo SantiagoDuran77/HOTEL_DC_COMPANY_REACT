@@ -34,15 +34,19 @@ const Login = () => {
     setError('')
 
     try {
-      console.log('🔐 Attempting login with:', formData)
+      console.log('🔐 Attempting login with:', {
+        email: formData.email.trim(),
+        password: '***' // No mostrar contraseña real en logs
+      })
       
       const response = await fetch('http://localhost:5000/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Importante para cookies si las usas
         body: JSON.stringify({
-          email: formData.email.trim(),
+          email: formData.email.trim().toLowerCase(), // Asegurar minúsculas
           password: formData.password
         }),
       })
@@ -51,38 +55,33 @@ const Login = () => {
       console.log('📡 Login response:', data)
 
       if (!response.ok) {
-        throw new Error(data.error || 'Error al iniciar sesión')
+        // Mostrar error específico del backend
+        throw new Error(data.error || `Error ${response.status}: ${response.statusText}`)
       }
 
       if (!data.accessToken) {
-        throw new Error('No se recibió token de acceso')
+        throw new Error('No se recibió token de acceso del servidor')
       }
 
-      console.log('✅ Login successful, user:', data.user)
-      console.log('🔍 Detalles del usuario recibido:', {
-        role: data.user.role,
-        usuario_acceso: data.user.usuario_acceso,
-        cargo_empleado: data.user.cargo_empleado,
-        id_empleado: data.user.id_empleado,
-        nombre_empleado: data.user.nombre_empleado
-      })
+      console.log('✅ Login successful, user data:', data.user)
 
       // Guardar en contexto y localStorage
       login(data.user, data.accessToken)
 
-      // === REDIRECCIÓN CORREGIDA - MANEJA MAYÚSCULAS/MINÚSCULAS ===
+      // === REDIRECCIÓN CON LÓGICA MEJORADA ===
       const userRole = data.user.role || data.user.usuario_acceso
       const roleLower = userRole ? userRole.toString().toLowerCase() : ''
 
       // Verificar si es empleado basado en múltiples criterios
       const isEmployee = (
-        roleLower === 'empleado' ||
-        (data.user.cargo_empleado && data.user.cargo_empleado !== '' && data.user.cargo_empleado !== null) ||
-        (data.user.id_empleado && (data.user.id_empleado > 0 || data.user.id_empleado !== undefined)) ||
-        (data.user.nombre_empleado && data.user.nombre_empleado !== '' && data.user.nombre_empleado !== null)
+        roleLower === 'empleado' || 
+        roleLower === 'admin' ||
+        (data.user.cargo_empleado && data.user.cargo_empleado.trim() !== '') ||
+        (data.user.id_empleado && (data.user.id_empleado > 0)) ||
+        (data.user.nombre_empleado && data.user.nombre_empleado.trim() !== '')
       )
 
-      console.log('🔍 Login - Verificación final de empleado:', {
+      console.log('🔍 Login - Verificación de tipo de usuario:', {
         userRole,
         roleLower,
         cargo_empleado: data.user.cargo_empleado,
@@ -93,16 +92,36 @@ const Login = () => {
 
       // Redirigir basado en el tipo de usuario
       if (isEmployee) {
-        console.log('🚀 Redirigiendo EMPLEADO a /admin')
-        navigate('/admin', { replace: true })
+        console.log('🚀 Redirigiendo EMPLEADO/ADMIN a /admin')
+        navigate('/admin', { 
+          replace: true,
+          state: { message: 'Bienvenido al panel de administración' }
+        })
       } else {
         console.log('🚀 Redirigiendo CLIENTE a /cliente')
-        navigate('/cliente', { replace: true })
+        navigate('/cliente', { 
+          replace: true,
+          state: { message: '¡Bienvenido de nuevo!' }
+        })
       }
 
     } catch (error) {
       console.error('❌ Login error:', error)
-      setError(error.message || 'Error al iniciar sesión. Verifica tus credenciales.')
+      
+      // Mensajes de error más específicos
+      let errorMessage = error.message || 'Error al iniciar sesión.'
+      
+      if (errorMessage.includes('Credenciales inválidas')) {
+        errorMessage = 'Email o contraseña incorrectos. Por favor, verifica tus credenciales.'
+      } else if (errorMessage.includes('cuenta no está verificada')) {
+        errorMessage = 'Tu cuenta no está verificada. Por favor revisa tu correo electrónico para el enlace de verificación.'
+      } else if (errorMessage.includes('Error 401')) {
+        errorMessage = 'Email o contraseña incorrectos. Si olvidaste tu contraseña, usa la opción "¿Olvidaste tu contraseña?"'
+      } else if (errorMessage.includes('Error 500')) {
+        errorMessage = 'Error del servidor. Por favor, intenta nuevamente más tarde.'
+      }
+      
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -121,7 +140,10 @@ const Login = () => {
         throw new Error('Se requieren email y nombre para continuar')
       }
 
-      console.log('🔐 Attempting Google login with:', { googleEmail, googleName })
+      console.log('🔐 Attempting Google login with:', { 
+        email: googleEmail.trim(),
+        name: googleName 
+      })
 
       const response = await fetch('http://localhost:5000/api/auth/google', {
         method: 'POST',
@@ -129,7 +151,7 @@ const Login = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: googleEmail.trim(),
+          email: googleEmail.trim().toLowerCase(),
           name: googleName
         }),
       })
@@ -155,15 +177,22 @@ const Login = () => {
       const roleLower = userRole ? userRole.toString().toLowerCase() : ''
       
       const isEmployee = (
-        roleLower === 'empleado' ||
-        (data.user.cargo_empleado && data.user.cargo_empleado !== null && data.user.cargo_empleado !== '') ||
+        roleLower === 'empleado' || 
+        roleLower === 'admin' ||
+        (data.user.cargo_empleado && data.user.cargo_empleado.trim() !== '') ||
         (data.user.id_empleado && data.user.id_empleado > 0)
       )
       
       if (isEmployee) {
-        navigate('/admin', { replace: true })
+        navigate('/admin', { 
+          replace: true,
+          state: { message: 'Bienvenido al panel de administración' }
+        })
       } else {
-        navigate('/cliente', { replace: true })
+        navigate('/cliente', { 
+          replace: true,
+          state: { message: '¡Bienvenido!' }
+        })
       }
 
     } catch (error) {
@@ -263,7 +292,7 @@ const Login = () => {
                   value={formData.email}
                   onChange={handleChange}
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  placeholder="tu@email.com"
+                  placeholder="ejemplo@correo.com"
                 />
               </div>
             </div>
@@ -282,7 +311,7 @@ const Login = () => {
                   value={formData.password}
                   onChange={handleChange}
                   className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  placeholder="Tu contraseña"
+                  placeholder="Ingresa tu contraseña"
                 />
                 <button
                   type="button"
@@ -295,6 +324,9 @@ const Login = () => {
                     <Eye className="h-5 w-5 text-gray-400" />
                   )}
                 </button>
+              </div>
+              <div className="mt-1 text-xs text-gray-500">
+                La contraseña debe tener al menos 6 caracteres
               </div>
             </div>
 
@@ -325,10 +357,13 @@ const Login = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
               >
                 {loading ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                    <span>Iniciando sesión...</span>
+                  </div>
                 ) : (
                   <>
                     <LogIn className="h-5 w-5 mr-2" />
@@ -367,6 +402,36 @@ const Login = () => {
                 <p className="text-sm text-blue-700">
                   Acceso para empleados con credenciales corporativas
                 </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Usa tu email corporativo y contraseña asignada
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Información de ayuda */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="text-center text-xs text-gray-500">
+              <p className="mb-1">¿Problemas para iniciar sesión?</p>
+              <div className="space-x-4">
+                <Link 
+                  to="/auth/forgot-password" 
+                  className="font-medium text-primary-600 hover:text-primary-500"
+                >
+                  Recuperar contraseña
+                </Link>
+                <Link 
+                  to="/auth/register" 
+                  className="font-medium text-primary-600 hover:text-primary-500"
+                >
+                  Crear cuenta nueva
+                </Link>
+                <Link 
+                  to="/contact" 
+                  className="font-medium text-primary-600 hover:text-primary-500"
+                >
+                  Contactar soporte
+                </Link>
               </div>
             </div>
           </div>

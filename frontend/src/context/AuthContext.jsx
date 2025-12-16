@@ -206,7 +206,7 @@ export const AuthProvider = ({ children }) => {
     isAdmin,
     getUserRole,
     checkAuth,
-    updateUser // 🆕 NUEVA FUNCIÓN AÑADIDA
+    updateUser
   }
 
   return (

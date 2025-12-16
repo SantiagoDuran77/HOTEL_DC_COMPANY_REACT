@@ -18,9 +18,17 @@ import {
   ChevronLeft,
   ChevronRight,
   Star,
-  Eye,
   MapPin,
-  DollarSign
+  DollarSign,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Check,
+  Plus,
+  Minus,
+  Calendar,
+  Eye,
+  Heart
 } from 'lucide-react'
 
 const Rooms = () => {
@@ -31,15 +39,27 @@ const Rooms = () => {
   const [roomsPerPage] = useState(6)
   const navigate = useNavigate()
   
-  // Estados de filtros
+  // Estados de filtros desplegables
   const [searchTerm, setSearchTerm] = useState('')
   const [priceRange, setPriceRange] = useState([0, 500000])
   const [capacity, setCapacity] = useState('all')
   const [roomType, setRoomType] = useState('all')
+  const [amenitiesFilter, setAmenitiesFilter] = useState([])
+  const [sortBy, setSortBy] = useState('default')
   const [showFilters, setShowFilters] = useState(true)
+  
+  // Estados para secciones desplegables
+  const [openSections, setOpenSections] = useState({
+    price: true,
+    capacity: true,
+    type: true,
+    amenities: true,
+    sort: false
+  })
   
   // Estados para carruseles
   const [roomSlides, setRoomSlides] = useState({})
+  const [favorites, setFavorites] = useState([])
 
   // Imágenes de ejemplo para las habitaciones
   const defaultRoomImages = {
@@ -75,6 +95,29 @@ const Rooms = () => {
     ]
   }
 
+  // Lista de comodidades disponibles
+  const availableAmenities = [
+    { id: 'wifi', name: 'WiFi', icon: <Wifi className="h-4 w-4" /> },
+    { id: 'tv', name: 'TV', icon: <Tv className="h-4 w-4" /> },
+    { id: 'ac', name: 'Aire Acondicionado', icon: <Wind className="h-4 w-4" /> },
+    { id: 'desayuno', name: 'Desayuno Incluido', icon: <Coffee className="h-4 w-4" /> },
+    { id: 'jacuzzi', name: 'Jacuzzi', icon: <Waves className="h-4 w-4" /> },
+    { id: 'parking', name: 'Parqueadero', icon: <Car className="h-4 w-4" /> },
+    { id: 'minibar', name: 'Minibar', icon: <Utensils className="h-4 w-4" /> },
+    { id: 'nevera', name: 'Nevera', icon: <Snowflake className="h-4 w-4" /> },
+    { id: 'baño_privado', name: 'Baño Privado', icon: <Bath className="h-4 w-4" /> },
+    { id: 'vistas', name: 'Vistas al Mar', icon: <Eye className="h-4 w-4" /> }
+  ]
+
+  // Opciones de ordenamiento
+  const sortOptions = [
+    { value: 'default', label: 'Recomendado' },
+    { value: 'price_asc', label: 'Precio: Menor a Mayor' },
+    { value: 'price_desc', label: 'Precio: Mayor a Menor' },
+    { value: 'capacity_desc', label: 'Capacidad: Mayor a Menor' },
+    { value: 'rating_desc', label: 'Mejor Calificadas' }
+  ]
+
   useEffect(() => {
     loadRooms()
   }, [])
@@ -82,7 +125,7 @@ const Rooms = () => {
   // Aplicar filtros cuando cambien
   useEffect(() => {
     applyFilters()
-  }, [rooms, searchTerm, priceRange, capacity, roomType])
+  }, [rooms, searchTerm, priceRange, capacity, roomType, amenitiesFilter, sortBy])
 
   const loadRooms = async () => {
     try {
@@ -168,8 +211,55 @@ const Rooms = () => {
       )
     }
 
+    // Filtro por comodidades
+    if (amenitiesFilter.length > 0) {
+      filtered = filtered.filter(room => {
+        return amenitiesFilter.every(amenity => 
+          room.amenities.some(rAmenity => 
+            rAmenity.toLowerCase().includes(amenity.toLowerCase())
+          )
+        )
+      })
+    }
+
+    // Ordenamiento
+    switch (sortBy) {
+      case 'price_asc':
+        filtered.sort((a, b) => a.price - b.price)
+        break
+      case 'price_desc':
+        filtered.sort((a, b) => b.price - a.price)
+        break
+      case 'capacity_desc':
+        filtered.sort((a, b) => b.capacity - a.capacity)
+        break
+      case 'rating_desc':
+        filtered.sort((a, b) => b.rating - a.rating)
+        break
+      default:
+        // Mantener orden por defecto
+        break
+    }
+
     setFilteredRooms(filtered)
     setCurrentPage(1) // Resetear a primera página
+  }
+
+  const toggleSection = (section) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
+
+  const toggleAmenity = (amenity) => {
+    setAmenitiesFilter(prev => {
+      if (prev.includes(amenity)) {
+        return prev.filter(a => a !== amenity)
+      } else {
+        return [...prev, amenity]
+      }
+    })
   }
 
   const changeRoomSlide = (roomId, direction) => {
@@ -190,6 +280,16 @@ const Rooms = () => {
       return {
         ...prev,
         [roomId]: newSlide
+      }
+    })
+  }
+
+  const toggleFavorite = (roomId) => {
+    setFavorites(prev => {
+      if (prev.includes(roomId)) {
+        return prev.filter(id => id !== roomId)
+      } else {
+        return [...prev, roomId]
       }
     })
   }
@@ -229,12 +329,16 @@ const Rooms = () => {
     setPriceRange([0, 500000])
     setCapacity('all')
     setRoomType('all')
+    setAmenitiesFilter([])
+    setSortBy('default')
   }
 
   const handleViewDetails = (room) => {
-    // Usar navigate para redirigir a la página de detalles de la habitación
-    // O mostrar un modal si prefieres
     navigate(`/reservar?roomId=${room.id}&price=${room.price}`)
+  }
+
+  const handlePriceChange = (min, max) => {
+    setPriceRange([min, max])
   }
 
   if (loading) {
@@ -269,137 +373,316 @@ const Rooms = () => {
       {/* Main Content with Sidebar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar de Filtros */}
+          {/* Sidebar de Filtros Mejorado */}
           <div className="lg:w-1/4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-4">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="lg:hidden text-gray-500 hover:text-gray-700"
-                >
-                  <Filter className="h-5 w-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={resetFilters}
+                    className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                  >
+                    Limpiar todo
+                  </button>
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="lg:hidden text-gray-500 hover:text-gray-700"
+                  >
+                    {showFilters ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </button>
+                </div>
               </div>
 
-              <div className={`space-y-6 ${showFilters ? 'block' : 'hidden lg:block'}`}>
+              <div className={`space-y-4 ${showFilters ? 'block' : 'hidden lg:block'}`}>
                 {/* Búsqueda */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Buscar
-                  </label>
+                <div className="mb-2">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                     <input
                       type="text"
-                      placeholder="Número, tipo, descripción..."
+                      placeholder="Buscar habitaciones..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     />
-                  </div>
-                </div>
-
-                {/* Rango de Precio */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Rango de Precio
-                  </label>
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <DollarSign className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm text-gray-600">${priceRange[0].toLocaleString()}</span>
-                      <span className="text-gray-400">-</span>
-                      <span className="text-sm text-gray-600">${priceRange[1].toLocaleString()}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="range"
-                        min="0"
-                        max="500000"
-                        step="10000"
-                        value={priceRange[0]}
-                        onChange={(e) => setPriceRange([parseInt(e.target.value), priceRange[1]])}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="range"
-                        min="0"
-                        max="500000"
-                        step="10000"
-                        value={priceRange[1]}
-                        onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Capacidad */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Capacidad
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {['all', '1', '2', '3', '4', '5', '6'].map((cap) => (
+                    {searchTerm && (
                       <button
-                        key={cap}
-                        onClick={() => setCapacity(cap)}
-                        className={`py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                          capacity === cap
-                            ? 'bg-primary-500 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                       >
-                        {cap === 'all' ? 'Todas' : `${cap} ${cap === '1' ? 'persona' : 'personas'}`}
+                        <X className="h-4 w-4" />
                       </button>
-                    ))}
+                    )}
                   </div>
                 </div>
 
-                {/* Tipo de Habitación */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tipo de Habitación
-                  </label>
+                {/* Ordenar por (siempre visible) */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium text-gray-700">Ordenar por</h3>
+                  </div>
                   <div className="space-y-2">
-                    {['all', 'sencilla', 'doble', 'suite', 'ejecutiva', 'familiar', 'presidencial'].map((type) => (
+                    {sortOptions.map((option) => (
                       <button
-                        key={type}
-                        onClick={() => setRoomType(type)}
-                        className={`w-full py-2 px-3 rounded-lg text-sm font-medium text-left transition-colors ${
-                          roomType === type
-                            ? 'bg-primary-500 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        key={option.value}
+                        onClick={() => setSortBy(option.value)}
+                        className={`w-full text-left py-2 px-3 rounded-lg text-sm transition-colors ${
+                          sortBy === option.value
+                            ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                            : 'text-gray-600 hover:bg-gray-50'
                         }`}
                       >
-                        {type === 'all' ? 'Todos los tipos' : 
-                         type === 'sencilla' ? 'Sencilla' :
-                         type === 'doble' ? 'Doble' :
-                         type === 'suite' ? 'Suite' :
-                         type === 'ejecutiva' ? 'Ejecutiva' :
-                         type === 'familiar' ? 'Familiar' : 'Presidencial'}
+                        <div className="flex items-center justify-between">
+                          <span>{option.label}</span>
+                          {sortBy === option.value && (
+                            <Check className="h-4 w-4 text-primary-600" />
+                          )}
+                        </div>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Botón reset */}
-                <button
-                  onClick={resetFilters}
-                  className="w-full py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors mt-4"
-                >
-                  Limpiar filtros
-                </button>
+                {/* Sección de Precio (Desplegable) */}
+                <div className="border-b border-gray-200 pb-4">
+                  <button
+                    onClick={() => toggleSection('price')}
+                    className="flex items-center justify-between w-full py-3 text-left"
+                  >
+                    <h3 className="font-medium text-gray-900">Rango de Precio</h3>
+                    {openSections.price ? (
+                      <ChevronUp className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </button>
+                  
+                  {openSections.price && (
+                    <div className="mt-3 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">${priceRange[0].toLocaleString()}</span>
+                        <span className="text-sm text-gray-600">${priceRange[1].toLocaleString()}</span>
+                      </div>
+                      <div className="relative pt-1">
+                        <input
+                          type="range"
+                          min="0"
+                          max="500000"
+                          step="10000"
+                          value={priceRange[0]}
+                          onChange={(e) => handlePriceChange(parseInt(e.target.value), priceRange[1])}
+                          className="absolute w-full h-2 bg-transparent appearance-none pointer-events-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-500 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:pointer-events-auto"
+                        />
+                        <input
+                          type="range"
+                          min="0"
+                          max="500000"
+                          step="10000"
+                          value={priceRange[1]}
+                          onChange={(e) => handlePriceChange(priceRange[0], parseInt(e.target.value))}
+                          className="absolute w-full h-2 bg-transparent appearance-none pointer-events-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-500 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:pointer-events-auto"
+                        />
+                        <div className="h-2 bg-gray-200 rounded-full"></div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-500 mb-1">Mínimo</label>
+                          <input
+                            type="number"
+                            value={priceRange[0]}
+                            onChange={(e) => handlePriceChange(parseInt(e.target.value), priceRange[1])}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-500 mb-1">Máximo</label>
+                          <input
+                            type="number"
+                            value={priceRange[1]}
+                            onChange={(e) => handlePriceChange(priceRange[0], parseInt(e.target.value))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sección de Capacidad (Desplegable) */}
+                <div className="border-b border-gray-200 pb-4">
+                  <button
+                    onClick={() => toggleSection('capacity')}
+                    className="flex items-center justify-between w-full py-3 text-left"
+                  >
+                    <h3 className="font-medium text-gray-900">Capacidad</h3>
+                    {openSections.capacity ? (
+                      <ChevronUp className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </button>
+                  
+                  {openSections.capacity && (
+                    <div className="mt-3 space-y-2">
+                      {['all', '1', '2', '3', '4', '5+'].map((cap) => {
+                        let label = ''
+                        let value = cap
+                        
+                        if (cap === 'all') label = 'Todas'
+                        else if (cap === '5+') {
+                          label = '5+ personas'
+                          value = '5'
+                        } else {
+                          label = `${cap} ${cap === '1' ? 'persona' : 'personas'}`
+                        }
+                        
+                        return (
+                          <button
+                            key={cap}
+                            onClick={() => setCapacity(value)}
+                            className={`w-full text-left py-2 px-3 rounded-lg text-sm transition-colors flex items-center justify-between ${
+                              capacity === value
+                                ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                                : 'text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-center">
+                              <Users className="h-4 w-4 mr-2" />
+                              {label}
+                            </div>
+                            {capacity === value && (
+                              <Check className="h-4 w-4 text-primary-600" />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Sección de Tipo de Habitación (Desplegable) */}
+                <div className="border-b border-gray-200 pb-4">
+                  <button
+                    onClick={() => toggleSection('type')}
+                    className="flex items-center justify-between w-full py-3 text-left"
+                  >
+                    <h3 className="font-medium text-gray-900">Tipo de Habitación</h3>
+                    {openSections.type ? (
+                      <ChevronUp className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </button>
+                  
+                  {openSections.type && (
+                    <div className="mt-3 space-y-2">
+                      {[
+                        { value: 'all', label: 'Todos los tipos' },
+                        { value: 'sencilla', label: 'Sencilla' },
+                        { value: 'doble', label: 'Doble' },
+                        { value: 'suite', label: 'Suite' },
+                        { value: 'ejecutiva', label: 'Ejecutiva' },
+                        { value: 'familiar', label: 'Familiar' },
+                        { value: 'presidencial', label: 'Presidencial' }
+                      ].map((type) => (
+                        <button
+                          key={type.value}
+                          onClick={() => setRoomType(type.value)}
+                          className={`w-full text-left py-2 px-3 rounded-lg text-sm transition-colors flex items-center justify-between ${
+                            roomType === type.value
+                              ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {type.label}
+                          {roomType === type.value && (
+                            <Check className="h-4 w-4 text-primary-600" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Sección de Comodidades (Desplegable) */}
+                <div className="border-b border-gray-200 pb-4">
+                  <button
+                    onClick={() => toggleSection('amenities')}
+                    className="flex items-center justify-between w-full py-3 text-left"
+                  >
+                    <h3 className="font-medium text-gray-900">Comodidades</h3>
+                    {openSections.amenities ? (
+                      <ChevronUp className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </button>
+                  
+                  {openSections.amenities && (
+                    <div className="mt-3 space-y-2">
+                      {availableAmenities.map((amenity) => (
+                        <button
+                          key={amenity.id}
+                          onClick={() => toggleAmenity(amenity.name)}
+                          className={`w-full text-left py-2 px-3 rounded-lg text-sm transition-colors flex items-center justify-between ${
+                            amenitiesFilter.includes(amenity.name)
+                              ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center">
+                            {amenity.icon}
+                            <span className="ml-2">{amenity.name}</span>
+                          </div>
+                          {amenitiesFilter.includes(amenity.name) && (
+                            <Check className="h-4 w-4 text-primary-600" />
+                          )}
+                        </button>
+                      ))}
+                      
+                      {amenitiesFilter.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="flex flex-wrap gap-2">
+                            {amenitiesFilter.map((amenity) => (
+                              <span
+                                key={amenity}
+                                className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-primary-100 text-primary-800"
+                              >
+                                {amenity}
+                                <button
+                                  onClick={() => toggleAmenity(amenity)}
+                                  className="ml-1 text-primary-600 hover:text-primary-800"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Info */}
-                <div className="pt-4 border-t">
-                  <p className="text-sm text-gray-600">
-                    Mostrando <span className="font-medium">{filteredRooms.length}</span> de{' '}
-                    <span className="font-medium">{rooms.length}</span> habitaciones
-                  </p>
+                <div className="pt-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Resultados:</span>
+                    <span className="font-medium text-gray-900">{filteredRooms.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm mt-1">
+                    <span className="text-gray-600">Filtros activos:</span>
+                    <span className="font-medium text-primary-600">
+                      {[
+                        searchTerm ? 'Búsqueda' : null,
+                        capacity !== 'all' ? 'Capacidad' : null,
+                        roomType !== 'all' ? 'Tipo' : null,
+                        amenitiesFilter.length > 0 ? 'Comodidades' : null,
+                        priceRange[0] > 0 || priceRange[1] < 500000 ? 'Precio' : null
+                      ].filter(Boolean).length}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -414,8 +697,17 @@ const Rooms = () => {
                   Habitaciones Disponibles
                 </h2>
                 <p className="text-gray-600 mt-1">
-                  {filteredRooms.length} resultados encontrados
+                  {filteredRooms.length} {filteredRooms.length === 1 ? 'habitación encontrada' : 'habitaciones encontradas'}
                 </p>
+              </div>
+              <div className="mt-3 sm:mt-0">
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="lg:hidden flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  {showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}
+                </button>
               </div>
             </div>
 
@@ -423,29 +715,38 @@ const Rooms = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {currentRooms.map((room) => {
                 const currentSlideIndex = roomSlides[room.id] || 0
+                const isFavorite = favorites.includes(room.id)
                 
                 return (
-                  <div key={room.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow duration-200">
+                  <div key={room.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-200 group">
                     {/* Carrusel de imágenes */}
                     <div className="relative h-56 bg-gray-200">
                       <img 
                         src={room.images?.[currentSlideIndex] || room.images?.[0]} 
                         alt={room.name}
-                        className="w-full h-full object-cover transition-opacity duration-300"
+                        className="w-full h-full object-cover transition-opacity duration-300 group-hover:scale-105"
                       />
+                      
+                      {/* Botón favorito */}
+                      <button
+                        onClick={() => toggleFavorite(room.id)}
+                        className="absolute top-3 right-3 p-2 bg-white/90 rounded-full hover:bg-white transition-colors"
+                      >
+                        <Heart className={`h-5 w-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+                      </button>
                       
                       {/* Controles del carrusel */}
                       {room.images && room.images.length > 1 && (
                         <>
                           <button 
                             onClick={() => changeRoomSlide(room.id, 'prev')}
-                            className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white/80 text-gray-800 p-1 rounded-full hover:bg-white"
+                            className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white/90 text-gray-800 p-2 rounded-full hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                             <ChevronLeft className="h-4 w-4" />
                           </button>
                           <button 
                             onClick={() => changeRoomSlide(room.id, 'next')}
-                            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white/80 text-gray-800 p-1 rounded-full hover:bg-white"
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white/90 text-gray-800 p-2 rounded-full hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                             <ChevronRight className="h-4 w-4" />
                           </button>
@@ -456,7 +757,11 @@ const Rooms = () => {
                               <button
                                 key={index}
                                 onClick={() => setRoomSlides(prev => ({ ...prev, [room.id]: index }))}
-                                className={`h-2 w-2 rounded-full ${index === currentSlideIndex ? 'bg-primary-500' : 'bg-white/70'}`}
+                                className={`h-2 w-2 rounded-full transition-all ${
+                                  index === currentSlideIndex 
+                                    ? 'bg-primary-500 w-4' 
+                                    : 'bg-white/70 hover:bg-white'
+                                }`}
                               />
                             ))}
                           </div>
@@ -481,20 +786,24 @@ const Rooms = () => {
                       
                       {/* Precio */}
                       <div className="absolute bottom-3 right-3">
-                        <span className="bg-white bg-opacity-90 px-3 py-1 rounded-lg text-sm font-semibold text-gray-900">
-                          {formatPrice(room.price)}/noche
+                        <span className="bg-white/95 backdrop-blur-sm px-4 py-2 rounded-lg shadow-sm text-base font-semibold text-gray-900">
+                          {formatPrice(room.price)}
+                          <span className="text-xs text-gray-600 font-normal block">/noche</span>
                         </span>
                       </div>
                     </div>
 
                     <div className="p-5">
                       <div className="flex items-start justify-between mb-3">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Habitación {room.number}
-                        </h3>
-                        <div className="flex items-center">
-                          <Star className="h-4 w-4 text-yellow-400 mr-1" />
-                          <span className="text-sm font-medium">{room.rating?.toFixed(1)}</span>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            Habitación {room.number}
+                          </h3>
+                          <div className="flex items-center mt-1">
+                            <Star className="h-4 w-4 text-yellow-400 fill-yellow-400 mr-1" />
+                            <span className="text-sm font-medium mr-1">{room.rating?.toFixed(1)}</span>
+                            <span className="text-sm text-gray-500">({room.reviews} reseñas)</span>
+                          </div>
                         </div>
                       </div>
 
@@ -502,27 +811,43 @@ const Rooms = () => {
                         {room.description}
                       </p>
 
-                      <div className="flex items-center text-sm text-gray-500 mb-4">
-                        <Users className="h-4 w-4 mr-1" />
-                        <span>Capacidad: {room.capacity} personas</span>
+                      <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
+                        <div className="flex items-center">
+                          <Users className="h-4 w-4 mr-1" />
+                          <span>Hasta {room.capacity} personas</span>
+                        </div>
+                        <div className="flex items-center">
+                          <span className={`inline-flex items-center px-2 py-1 rounded text-xs ${
+                            room.capacity === 1 ? 'bg-blue-100 text-blue-800' :
+                            room.capacity === 2 ? 'bg-green-100 text-green-800' :
+                            room.capacity >= 3 ? 'bg-purple-100 text-purple-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {room.capacity === 1 ? 'Individual' :
+                             room.capacity === 2 ? 'Pareja' :
+                             room.capacity === 3 ? 'Triple' :
+                             'Grupo'}
+                          </span>
+                        </div>
                       </div>
 
                       {room.amenities && room.amenities.length > 0 && (
                         <div className="mb-4">
-                          <div className="flex flex-wrap gap-2">
-                            {room.amenities.slice(0, 3).map((amenity, index) => (
+                          <p className="text-xs text-gray-500 mb-2">Incluye:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {room.amenities.slice(0, 4).map((amenity, index) => (
                               <div
                                 key={index}
-                                className="flex items-center space-x-1 bg-gray-50 px-2 py-1 rounded-md text-xs text-gray-600"
+                                className="flex items-center space-x-1 bg-gray-50 px-2 py-1.5 rounded-md text-xs text-gray-600"
                                 title={amenity}
                               >
                                 {getAmenityIcon(amenity)}
-                                <span className="truncate max-w-20">{amenity}</span>
+                                <span className="truncate max-w-24">{amenity.split(' ')[0]}</span>
                               </div>
                             ))}
-                            {room.amenities.length > 3 && (
-                              <div className="bg-gray-50 px-2 py-1 rounded-md text-xs text-gray-600">
-                                +{room.amenities.length - 3} más
+                            {room.amenities.length > 4 && (
+                              <div className="bg-gray-50 px-2 py-1.5 rounded-md text-xs text-gray-600">
+                                +{room.amenities.length - 4} más
                               </div>
                             )}
                           </div>
@@ -532,16 +857,18 @@ const Rooms = () => {
                       <div className="flex space-x-3 pt-4 border-t">
                         <button
                           onClick={() => handleViewDetails(room)}
-                          className="flex-1 bg-primary-500 hover:bg-primary-600 text-white text-center py-2 px-4 rounded-lg font-medium transition-colors duration-200"
+                          className="flex-1 flex items-center justify-center gap-2 bg-gray-50 hover:bg-gray-100 text-gray-700 text-center py-2.5 px-4 rounded-lg font-medium transition-colors duration-200 border border-gray-300"
                         >
+                          <Eye className="h-4 w-4" />
                           Ver Detalles
                         </button>
                         {room.estado === 'Disponible' && (
                           <Link
                             to={`/reservar?roomId=${room.id}&price=${room.price}`}
-                            className="flex-1 bg-secondary-500 hover:bg-secondary-600 text-white text-center py-2 px-4 rounded-lg font-medium transition-colors duration-200"
+                            className="flex-1 flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white text-center py-2.5 px-4 rounded-lg font-medium transition-colors duration-200"
                           >
-                            Reservar
+                            <Calendar className="h-4 w-4" />
+                            Reservar Ahora
                           </Link>
                         )}
                       </div>
@@ -552,20 +879,29 @@ const Rooms = () => {
             </div>
 
             {filteredRooms.length === 0 && (
-              <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-                <Bed className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  No hay habitaciones disponibles
+              <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+                <Bed className="h-20 w-20 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  No se encontraron habitaciones
                 </h3>
-                <p className="text-gray-600 mb-4">
-                  No encontramos habitaciones que coincidan con tus criterios de búsqueda.
+                <p className="text-gray-600 max-w-md mx-auto mb-6">
+                  Lo sentimos, no encontramos habitaciones que coincidan con tus criterios de búsqueda.
+                  Intenta ajustar los filtros o busca otros términos.
                 </p>
-                <button
-                  onClick={resetFilters}
-                  className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
-                >
-                  Limpiar filtros
-                </button>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={resetFilters}
+                    className="px-6 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium"
+                  >
+                    Limpiar todos los filtros
+                  </button>
+                  <button
+                    onClick={() => navigate('/')}
+                    className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    Volver al inicio
+                  </button>
+                </div>
               </div>
             )}
 
@@ -576,9 +912,10 @@ const Rooms = () => {
                   <button
                     onClick={() => paginate(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    className="px-4 py-2.5 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 font-medium text-sm flex items-center gap-1"
                   >
-                    ← Anterior
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
                   </button>
                   
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -597,7 +934,7 @@ const Rooms = () => {
                       <button
                         key={pageNum}
                         onClick={() => paginate(pageNum)}
-                        className={`px-4 py-2 rounded-lg transition-colors ${
+                        className={`px-4 py-2.5 rounded-lg transition-colors text-sm font-medium ${
                           currentPage === pageNum
                             ? 'bg-primary-500 text-white'
                             : 'border border-gray-300 hover:bg-gray-50'
@@ -611,9 +948,10 @@ const Rooms = () => {
                   <button
                     onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    className="px-4 py-2.5 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 font-medium text-sm flex items-center gap-1"
                   >
-                    Siguiente →
+                    Siguiente
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 </nav>
               </div>

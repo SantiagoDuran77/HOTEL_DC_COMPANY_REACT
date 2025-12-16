@@ -21,7 +21,32 @@ verifyEmailConnection().then(success => {
   }
 });
 
-// POST /api/auth/register - Registrar nuevo usuario
+// ==================== SOLUCIÓN DEFINITIVA PARA CHAR(4) ====================
+// Tabla auxiliar para almacenar hashes completos
+const setupPasswordSystem = async () => {
+  try {
+    // Crear tabla para almacenar hashes completos
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS password_hashes (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id INT NOT NULL,
+        full_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+        UNIQUE KEY unique_user (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `)
+    console.log('✅ Sistema de contraseñas configurado')
+  } catch (error) {
+    console.log('ℹ️ Sistema de contraseñas ya configurado:', error.message)
+  }
+}
+
+// Configurar al iniciar
+setupPasswordSystem()
+
+// ==================== POST /api/auth/register ====================
 router.post("/register", async (req, res) => {
   let connection;
   try {
@@ -63,7 +88,7 @@ router.post("/register", async (req, res) => {
     // Verificar si el usuario ya existe
     const [existingUsers] = await db.execute(
       'SELECT * FROM usuario WHERE correo_usuario = ?',
-      [email]
+      [email.toLowerCase()]
     );
 
     if (existingUsers.length > 0) {
@@ -78,35 +103,42 @@ router.post("/register", async (req, res) => {
     await connection.beginTransaction();
 
     try {
-      // Encriptar contraseña
+      // 1. Generar hash bcrypt completo
       const hashedPassword = await bcrypt.hash(password, 12);
-
-      // Generar token de verificación (64 caracteres hexadecimal)
-      const verificationToken = crypto.randomBytes(32).toString('hex');
       
-      // Fecha de expiración (24 horas desde ahora)
+      // 2. Para CHAR(4): Almacenar marcador '$2a$'
+      const char4Password = '$2a$';
+      
+      console.log('🔐 Hash bcrypt completo:', hashedPassword);
+      console.log('🔐 Marcador para CHAR(4):', char4Password);
+
+      // 3. Generar token de verificación
+      const verificationToken = crypto.randomBytes(32).toString('hex');
       const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      console.log('🔐 Token generado:', verificationToken);
-      console.log('⏰ Expira:', verificationTokenExpires);
-
-      // 1. Crear usuario (inicialmente inactivo)
+      // 4. Crear usuario (con marcador en CHAR(4))
       const [userResult] = await connection.execute(
         `INSERT INTO usuario (correo_usuario, usuario_acceso, contraseña_usuario, estado_usuario, fecha_registro, reset_token, reset_token_expires) 
          VALUES (?, 'Cliente', ?, 'Inactivo', NOW(), ?, ?)`,
-        [email, hashedPassword, verificationToken, verificationTokenExpires]
+        [email.toLowerCase(), char4Password, verificationToken, verificationTokenExpires]
       );
 
       const userId = userResult.insertId;
 
-      // 2. Crear cliente
+      // 5. Almacenar hash completo en tabla auxiliar
+      await connection.execute(
+        'INSERT INTO password_hashes (user_id, full_hash) VALUES (?, ?)',
+        [userId, hashedPassword]
+      );
+
+      // 6. Crear cliente
       await connection.execute(
         `INSERT INTO cliente (nombre_cliente, apellido_cliente, correo_cliente, telefono_cliente, direccion_cliente, nacionalidad) 
          VALUES (?, ?, ?, ?, ?, ?)`,
         [
           nombre.trim(),
           apellido.trim(),
-          email,
+          email.toLowerCase(),
           telefono || null,
           direccion || null,
           nacionalidad || 'Colombiana'
@@ -117,7 +149,7 @@ router.post("/register", async (req, res) => {
 
       console.log('✅ Registro exitoso para:', email);
 
-      // ENVIAR EMAIL REAL DE VERIFICACIÓN
+      // Enviar email de verificación
       const emailSent = await sendVerificationEmail(email, `${nombre} ${apellido}`, verificationToken);
 
       if (emailSent) {
@@ -126,10 +158,7 @@ router.post("/register", async (req, res) => {
           message: "🎉 Usuario registrado exitosamente. Se ha enviado un email de verificación a tu correo electrónico."
         });
       } else {
-        // Fallback si falla el email
         const fallbackUrl = `${process.env.CLIENT_URL}/auth/verify-email?token=${verificationToken}`;
-        console.log('🔄 Fallback - URL de verificación:', fallbackUrl);
-        
         res.status(201).json({
           success: true,
           message: "Usuario registrado exitosamente. Por problemas técnicos con el email, usa el siguiente enlace:",
@@ -152,7 +181,191 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// GET /api/auth/verify-email - Verificar email
+// ==================== POST /api/auth/login - CORREGIDO DEFINITIVAMENTE ====================
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    console.log('🔐 Intento de login para:', email);
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Email y contraseña son requeridos"
+      });
+    }
+
+    // Buscar usuario
+    const [users] = await db.execute(`
+      SELECT 
+        u.id_usuario,
+        u.correo_usuario,
+        u.contraseña_usuario,
+        u.usuario_acceso,
+        u.estado_usuario,
+        u.fecha_registro,
+        c.id_cliente,
+        c.nombre_cliente,
+        c.apellido_cliente,
+        c.telefono_cliente,
+        c.direccion_cliente,
+        c.nacionalidad,
+        e.id_empleado,
+        e.nombre_empleado,
+        e.apellido_empleado,
+        e.cargo_empleado,
+        e.telefono_empleado,
+        e.fecha_contratacion
+      FROM usuario u
+      LEFT JOIN cliente c ON u.correo_usuario = c.correo_cliente
+      LEFT JOIN empleado e ON u.correo_usuario = e.correo_empleado
+      WHERE u.correo_usuario = ?
+    `, [email.toLowerCase()]);
+
+    if (users.length === 0) {
+      console.log('❌ Usuario no encontrado:', email);
+      return res.status(401).json({
+        success: false,
+        error: "Credenciales inválidas"
+      });
+    }
+
+    const user = users[0];
+    console.log('👤 Usuario encontrado:', user.correo_usuario, 'Estado:', user.estado_usuario);
+
+    // Verificar si la cuenta está verificada
+    if (user.estado_usuario === 'Inactivo') {
+      return res.status(401).json({
+        success: false,
+        error: "Tu cuenta no está verificada. Por favor verifica tu email antes de iniciar sesión."
+      });
+    }
+
+    // ========== VERIFICACIÓN DE CONTRASEÑA MEJORADA ==========
+    console.log('🔑 Información de contraseña:');
+    console.log('   - Contraseña recibida:', password);
+    console.log('   - Hash almacenado (CHAR4):', user.contraseña_usuario);
+    console.log('   - Longitud del hash:', user.contraseña_usuario?.length);
+
+    let isValidPassword = false;
+
+    // ESTRATEGIA 1: Usuarios antiguos (4 dígitos)
+    if (user.contraseña_usuario && user.contraseña_usuario.length === 4 && /^\d+$/.test(user.contraseña_usuario)) {
+      console.log('   - Sistema: ANTIGUO (4 dígitos)');
+      isValidPassword = (password === user.contraseña_usuario);
+      console.log('   - Resultado comparación 4 dígitos:', isValidPassword);
+    }
+    // ESTRATEGIA 2: Usuarios nuevos con hash completo
+    else if (user.contraseña_usuario === '$2a$' || user.contraseña_usuario.startsWith('$2')) {
+      console.log('   - Sistema: NUEVO (bcrypt con tabla auxiliar)');
+      
+      try {
+        // Buscar hash completo en tabla auxiliar
+        const [hashRecords] = await db.execute(
+          'SELECT full_hash FROM password_hashes WHERE user_id = ?',
+          [user.id_usuario]
+        );
+
+        if (hashRecords.length > 0) {
+          const fullHash = hashRecords[0].full_hash;
+          console.log('   - Hash completo encontrado en tabla auxiliar');
+          isValidPassword = await bcrypt.compare(password, fullHash);
+          console.log('   - Resultado bcrypt.compare:', isValidPassword);
+        } else {
+          // Fallback: comparar primeros 4 caracteres del hash generado
+          console.log('   - No hay hash completo, usando comparación truncada');
+          const tempHash = await bcrypt.hash(password, 12);
+          const tempTruncated = tempHash.substring(0, 4);
+          isValidPassword = (user.contraseña_usuario === tempTruncated);
+          console.log('   - Resultado comparación truncada:', isValidPassword);
+        }
+      } catch (error) {
+        console.error('❌ Error en verificación bcrypt:', error);
+        // Último recurso: comparación directa
+        isValidPassword = (password === user.contraseña_usuario);
+      }
+    }
+    // ESTRATEGIA 3: Otros casos (comparación directa)
+    else {
+      console.log('   - Sistema: COMPARACIÓN DIRECTA');
+      isValidPassword = (password === user.contraseña_usuario);
+      console.log('   - Resultado comparación directa:', isValidPassword);
+    }
+
+    if (!isValidPassword) {
+      console.log('❌ Contraseña inválida');
+      return res.status(401).json({
+        success: false,
+        error: "Credenciales inválidas"
+      });
+    }
+
+    // ========== PREPARAR RESPUESTA ==========
+    console.log('✅ Contraseña válida - Preparando respuesta...');
+    
+    const userData = {
+      id: user.id_usuario,
+      email: user.correo_usuario,
+      role: user.usuario_acceso,
+      status: user.estado_usuario,
+      registration_date: user.fecha_registro
+    };
+
+    // Agregar información específica
+    if (user.usuario_acceso === 'Cliente' && user.id_cliente) {
+      userData.client_id = user.id_cliente;
+      userData.name = user.nombre_cliente;
+      userData.last_name = user.apellido_cliente;
+      userData.phone = user.telefono_cliente;
+      userData.address = user.direccion_cliente;
+      userData.nationality = user.nacionalidad;
+      userData.full_name = `${user.nombre_cliente} ${user.apellido_cliente}`;
+    } else if ((user.usuario_acceso === 'Empleado' || user.usuario_acceso === 'Admin') && user.id_empleado) {
+      userData.employee_id = user.id_empleado;
+      userData.name = user.nombre_empleado;
+      userData.last_name = user.apellido_empleado;
+      userData.position = user.cargo_empleado;
+      userData.phone = user.telefono_empleado;
+      userData.hire_date = user.fecha_contratacion;
+      userData.full_name = `${user.nombre_empleado} ${user.apellido_empleado}`;
+      
+      // Campos específicos para empleados en el frontend
+      userData.id_empleado = user.id_empleado;
+      userData.nombre_empleado = user.nombre_empleado;
+      userData.cargo_empleado = user.cargo_empleado;
+      userData.usuario_acceso = user.usuario_acceso;
+    }
+
+    // Generar token JWT
+    const token = jwt.sign(
+      { 
+        userId: user.id_usuario,
+        email: user.correo_usuario,
+        role: user.usuario_acceso 
+      },
+      process.env.JWT_SECRET || 'fallback_secret_for_dev',
+      { expiresIn: '24h' }
+    );
+
+    console.log('✅ Login exitoso para:', user.correo_usuario);
+
+    res.json({
+      success: true,
+      message: "Login exitoso",
+      accessToken: token,
+      user: userData
+    });
+
+  } catch (error) {
+    console.error('❌ Error en login:', error);
+    res.status(500).json({
+      success: false,
+      error: "Error interno del servidor"
+    });
+  }
+});
+
+// ==================== GET /api/auth/verify-email ====================
 router.get("/verify-email", async (req, res) => {
   try {
     const { token } = req.query;
@@ -218,161 +431,7 @@ router.get("/verify-email", async (req, res) => {
   }
 });
 
-// POST /api/auth/login - Iniciar sesión CORREGIDO DEFINITIVAMENTE
-router.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    console.log('🔐 Intento de login para:', email);
-
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        error: "Email y contraseña son requeridos"
-      });
-    }
-
-    // Buscar usuario
-    const [users] = await db.execute(`
-      SELECT 
-        u.id_usuario,
-        u.correo_usuario,
-        u.contraseña_usuario,
-        u.usuario_acceso,
-        u.estado_usuario,
-        u.fecha_registro,
-        c.id_cliente,
-        c.nombre_cliente,
-        c.apellido_cliente,
-        c.telefono_cliente,
-        c.direccion_cliente,
-        c.nacionalidad,
-        e.id_empleado,
-        e.nombre_empleado,
-        e.apellido_empleado,
-        e.cargo_empleado,
-        e.telefono_empleado,
-        e.fecha_contratacion
-      FROM usuario u
-      LEFT JOIN cliente c ON u.correo_usuario = c.correo_cliente
-      LEFT JOIN empleado e ON u.correo_usuario = e.correo_empleado
-      WHERE u.correo_usuario = ?
-    `, [email]);
-
-    if (users.length === 0) {
-      console.log('❌ Usuario no encontrado:', email);
-      return res.status(401).json({
-        success: false,
-        error: "Credenciales inválidas"
-      });
-    }
-
-    const user = users[0];
-    console.log('👤 Usuario encontrado:', user.correo_usuario, 'Estado:', user.estado_usuario);
-
-    // Verificar si la cuenta está verificada
-    if (user.estado_usuario === 'Inactivo') {
-      return res.status(401).json({
-        success: false,
-        error: "Tu cuenta no está verificada. Por favor verifica tu email antes de iniciar sesión."
-      });
-    }
-
-    // DEBUG: Mostrar información de la contraseña
-    console.log('🔑 Información de contraseña:');
-    console.log('   - Contraseña recibida:', password);
-    console.log('   - Hash almacenado:', user.contraseña_usuario);
-    console.log('   - Longitud del hash:', user.contraseña_usuario?.length);
-
-    // VERIFICACIÓN DE CONTRASEÑA MEJORADA
-    let isValidPassword = false;
-
-    try {
-      // Siempre intentar comparar con bcrypt primero
-      if (user.contraseña_usuario) {
-        // Si el hash tiene la estructura de bcrypt (comienza con $2a$, $2b$, etc.)
-        if (user.contraseña_usuario.startsWith('$2')) {
-          console.log('   - Tipo: Bcrypt hash - usando bcrypt.compare()');
-          isValidPassword = await bcrypt.compare(password, user.contraseña_usuario);
-        } else {
-          // Si no es un hash bcrypt, podría ser texto plano (usuarios antiguos)
-          console.log('   - Tipo: Texto plano - comparación directa');
-          isValidPassword = (password === user.contraseña_usuario);
-        }
-      }
-    } catch (bcryptError) {
-      console.error('❌ Error en bcrypt.compare:', bcryptError);
-      // Si bcrypt falla, intentar comparación directa
-      isValidPassword = (password === user.contraseña_usuario);
-    }
-
-    console.log('   - Contraseña válida:', isValidPassword);
-
-    if (!isValidPassword) {
-      return res.status(401).json({
-        success: false,
-        error: "Credenciales inválidas"
-      });
-    }
-
-    // Preparar datos del usuario
-    const userData = {
-      id: user.id_usuario,
-      email: user.correo_usuario,
-      role: user.usuario_acceso,
-      status: user.estado_usuario,
-      registration_date: user.fecha_registro
-    };
-
-    // Agregar información específica
-    if (user.usuario_acceso === 'Cliente' && user.id_cliente) {
-      userData.client_id = user.id_cliente;
-      userData.name = user.nombre_cliente;
-      userData.last_name = user.apellido_cliente;
-      userData.phone = user.telefono_cliente;
-      userData.address = user.direccion_cliente;
-      userData.nationality = user.nacionalidad;
-      userData.full_name = `${user.nombre_cliente} ${user.apellido_cliente}`;
-    } else if (user.usuario_acceso === 'Empleado' && user.id_empleado) {
-      userData.employee_id = user.id_empleado;
-      userData.name = user.nombre_empleado;
-      userData.last_name = user.apellido_empleado;
-      userData.position = user.cargo_empleado;
-      userData.phone = user.telefono_empleado;
-      userData.hire_date = user.fecha_contratacion;
-      userData.full_name = `${user.nombre_empleado} ${user.apellido_empleado}`;
-    }
-
-    // Generar token JWT
-    const token = jwt.sign(
-      { 
-        userId: user.id_usuario,
-        email: user.correo_usuario,
-        role: user.usuario_acceso 
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    console.log('✅ Login exitoso para:', user.correo_usuario);
-
-    res.json({
-      success: true,
-      message: "Login exitoso",
-      accessToken: token,
-      user: userData
-    });
-
-  } catch (error) {
-    console.error('❌ Error en login:', error);
-    res.status(500).json({
-      success: false,
-      error: "Error interno del servidor"
-    });
-  }
-});
-
-// POST /api/auth/forgot-password - Recuperación de contraseña
+// ==================== POST /api/auth/forgot-password ====================
 router.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
@@ -389,7 +448,7 @@ router.post("/forgot-password", async (req, res) => {
     // Verificar si el usuario existe
     const [users] = await db.execute(
       'SELECT * FROM usuario WHERE correo_usuario = ?',
-      [email]
+      [email.toLowerCase()]
     );
 
     if (users.length === 0) {
@@ -408,7 +467,7 @@ router.post("/forgot-password", async (req, res) => {
     if (user.usuario_acceso === 'Cliente') {
       const [clients] = await db.execute(
         'SELECT * FROM cliente WHERE correo_cliente = ?',
-        [email]
+        [email.toLowerCase()]
       );
       if (clients.length > 0) {
         const client = clients[0];
@@ -452,7 +511,7 @@ router.post("/forgot-password", async (req, res) => {
   }
 });
 
-// POST /api/auth/reset-password - Restablecer contraseña
+// ==================== POST /api/auth/reset-password ====================
 router.post("/reset-password", async (req, res) => {
   try {
     const { token, newPassword } = req.body;
@@ -488,19 +547,28 @@ router.post("/reset-password", async (req, res) => {
 
     const user = users[0];
 
-    // Encriptar nueva contraseña
+    // Generar hash bcrypt completo
     const hashedPassword = await bcrypt.hash(newPassword, 12);
+    
+    // Para CHAR(4): Almacenar marcador '$2a$'
+    const char4Password = '$2a$';
 
-    // DEBUG: Mostrar información del hash
-    console.log('🔑 Nueva contraseña encriptada:');
-    console.log('   - Contraseña original:', newPassword);
-    console.log('   - Hash bcrypt:', hashedPassword);
-    console.log('   - Longitud del hash:', hashedPassword.length);
+    console.log('🔑 Nueva contraseña:');
+    console.log('   - Hash bcrypt completo:', hashedPassword);
+    console.log('   - Marcador para CHAR(4):', char4Password);
 
-    // Actualizar contraseña
+    // Actualizar contraseña en usuario (CHAR4)
     await db.execute(
       'UPDATE usuario SET contraseña_usuario = ?, reset_token = NULL, reset_token_expires = NULL WHERE id_usuario = ?',
-      [hashedPassword, user.id_usuario]
+      [char4Password, user.id_usuario]
+    );
+
+    // Actualizar o insertar hash completo en tabla auxiliar
+    await db.execute(
+      `INSERT INTO password_hashes (user_id, full_hash) 
+       VALUES (?, ?) 
+       ON DUPLICATE KEY UPDATE full_hash = ?`,
+      [user.id_usuario, hashedPassword, hashedPassword]
     );
 
     console.log('✅ Contraseña restablecida para:', user.correo_usuario);
@@ -519,7 +587,7 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
-// GET /api/auth/verify - Verificar token
+// ==================== GET /api/auth/verify ====================
 router.get("/verify", async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -532,7 +600,7 @@ router.get("/verify", async (req, res) => {
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_for_dev');
 
       // Buscar usuario actualizado
       const [users] = await db.execute(`
@@ -582,13 +650,17 @@ router.get("/verify", async (req, res) => {
         userData.address = user.direccion_cliente;
         userData.nationality = user.nacionalidad;
         userData.full_name = `${user.nombre_cliente} ${user.apellido_cliente}`;
-      } else if (user.usuario_acceso === 'Empleado') {
+      } else if (user.usuario_acceso === 'Empleado' || user.usuario_acceso === 'Admin') {
         userData.name = user.nombre_empleado;
         userData.last_name = user.apellido_empleado;
         userData.position = user.cargo_empleado;
         userData.phone = user.telefono_empleado;
         userData.hire_date = user.fecha_contratacion;
         userData.full_name = `${user.nombre_empleado} ${user.apellido_empleado}`;
+        userData.id_empleado = user.id_empleado;
+        userData.nombre_empleado = user.nombre_empleado;
+        userData.cargo_empleado = user.cargo_empleado;
+        userData.usuario_acceso = user.usuario_acceso;
       }
 
       res.json({
@@ -612,7 +684,7 @@ router.get("/verify", async (req, res) => {
   }
 });
 
-// POST /api/auth/google - Google OAuth
+// ==================== POST /api/auth/google ====================
 router.post("/google", async (req, res) => {
   try {
     const { email, name } = req.body;
@@ -629,7 +701,7 @@ router.post("/google", async (req, res) => {
     // Buscar si el usuario ya existe
     const [users] = await db.execute(
       'SELECT * FROM usuario WHERE correo_usuario = ?',
-      [email]
+      [email.toLowerCase()]
     );
 
     let user;
@@ -645,15 +717,22 @@ router.post("/google", async (req, res) => {
         // Generar contraseña segura para Google users
         const randomPassword = crypto.randomBytes(16).toString('hex');
         const hashedPassword = await bcrypt.hash(randomPassword, 12);
+        const char4Password = '$2a$';
 
-        // Crear usuario (activado automáticamente para Google)
+        // Crear usuario
         const [userResult] = await connection.execute(
           `INSERT INTO usuario (correo_usuario, usuario_acceso, contraseña_usuario, estado_usuario, fecha_registro) 
            VALUES (?, 'Cliente', ?, 'Activo', NOW())`,
-          [email, hashedPassword]
+          [email.toLowerCase(), char4Password]
         );
 
         const userId = userResult.insertId;
+
+        // Almacenar hash completo
+        await connection.execute(
+          'INSERT INTO password_hashes (user_id, full_hash) VALUES (?, ?)',
+          [userId, hashedPassword]
+        );
 
         // Separar nombre y apellido
         const nameParts = name.split(' ');
@@ -664,7 +743,7 @@ router.post("/google", async (req, res) => {
         await connection.execute(
           `INSERT INTO cliente (nombre_cliente, apellido_cliente, correo_cliente, nacionalidad) 
            VALUES (?, ?, ?, 'No especificada')`,
-          [firstName, lastName, email]
+          [firstName, lastName, email.toLowerCase()]
         );
 
         await connection.commit();
@@ -675,7 +754,7 @@ router.post("/google", async (req, res) => {
           FROM usuario u 
           LEFT JOIN cliente c ON u.correo_usuario = c.correo_cliente 
           WHERE u.correo_usuario = ?`,
-          [email]
+          [email.toLowerCase()]
         );
         
         user = newUsers[0];
@@ -747,7 +826,7 @@ router.post("/google", async (req, res) => {
         email: user.correo_usuario,
         role: user.usuario_acceso 
       },
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || 'fallback_secret_for_dev',
       { expiresIn: '24h' }
     );
 
@@ -769,7 +848,7 @@ router.post("/google", async (req, res) => {
   }
 });
 
-// GET /api/auth/test - Ruta de prueba
+// ==================== GET /api/auth/test ====================
 router.get("/test", (req, res) => {
   res.json({
     success: true,

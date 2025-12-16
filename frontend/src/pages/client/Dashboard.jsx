@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { getReservations } from '../../services/api'
 import { Calendar, Bed, Clock, ArrowRight } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
 
 const ClientDashboard = () => {
   const [reservations, setReservations] = useState([])
   const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
 
   useEffect(() => {
     loadReservations()
@@ -14,8 +16,7 @@ const ClientDashboard = () => {
   const loadReservations = async () => {
     try {
       const reservationsData = await getReservations()
-      // Filtrar solo las reservas del usuario actual
-      setReservations(reservationsData.slice(0, 3)) // Mostrar solo las 3 más recientes
+      setReservations(reservationsData.slice(0, 3))
     } catch (error) {
       console.error('Error loading reservations:', error)
     } finally {
@@ -45,6 +46,63 @@ const ClientDashboard = () => {
     }
   }
 
+  // MISMA FUNCIÓN que en el Header (para consistencia)
+  const getUserDisplayName = () => {
+    console.log('🔍 User en Dashboard:', user)
+    
+    if (!user || Object.keys(user).length === 0) {
+      return 'Cliente'
+    }
+    
+    // 1. Buscar nombre completo de cliente
+    if (user.nombre_cliente && user.apellido_cliente) {
+      return `${user.nombre_cliente} ${user.apellido_cliente}`
+    }
+    
+    // 2. Buscar solo nombre de cliente
+    if (user.nombre_cliente) {
+      return user.nombre_cliente
+    }
+    
+    // 3. Buscar nombre completo de empleado
+    if (user.nombre_empleado && user.apellido_empleado) {
+      return `${user.nombre_empleado} ${user.apellido_empleado}`
+    }
+    
+    // 4. Buscar solo nombre de empleado
+    if (user.nombre_empleado) {
+      return user.nombre_empleado
+    }
+    
+    // 5. Buscar campo "nombre" general
+    if (user.nombre) {
+      return user.nombre
+    }
+    
+    // 6. EXTRAER del correo (GARANTIZADO)
+    if (user.correo_usuario) {
+      const nombreDelCorreo = user.correo_usuario.split('@')[0]
+      return nombreDelCorreo.charAt(0).toUpperCase() + nombreDelCorreo.slice(1)
+    }
+    
+    if (user.email) {
+      const nombreDelCorreo = user.email.split('@')[0]
+      return nombreDelCorreo.charAt(0).toUpperCase() + nombreDelCorreo.slice(1)
+    }
+    
+    if (user.correo_cliente) {
+      const nombreDelCorreo = user.correo_cliente.split('@')[0]
+      return nombreDelCorreo.charAt(0).toUpperCase() + nombreDelCorreo.slice(1)
+    }
+    
+    if (user.correo_empleado) {
+      const nombreDelCorreo = user.correo_empleado.split('@')[0]
+      return nombreDelCorreo.charAt(0).toUpperCase() + nombreDelCorreo.slice(1)
+    }
+    
+    return 'Cliente'
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -55,9 +113,11 @@ const ClientDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
+      {/* Welcome Section - CON EL MISMO NOMBRE que en Header */}
       <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-2xl p-8 text-white">
-        <h1 className="text-3xl font-bold mb-2">Bienvenido de vuelta</h1>
+        <h1 className="text-3xl font-bold mb-2">
+          ¡Bienvenido, {getUserDisplayName()}!
+        </h1>
         <p className="text-primary-100 text-lg">
           Esperamos que tengas una excelente experiencia con nosotros
         </p>
