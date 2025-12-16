@@ -19,6 +19,8 @@ const RoomsManagement = () => {
     capacidad: '',
     servicios_incluidos: ''
   })
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(5) // Cambiado de 10 a 5
 
   useEffect(() => {
     loadRooms()
@@ -40,6 +42,24 @@ const RoomsManagement = () => {
     room.tipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
     room.estado.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  // Lógica de paginación
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+  const currentRooms = filteredRooms.slice(indexOfFirstItem, indexOfLastItem)
+  const totalPages = Math.ceil(filteredRooms.length / itemsPerPage)
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber)
+  const nextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1)
+  }
+  const prevPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1)
+  }
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -187,7 +207,7 @@ const RoomsManagement = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredRooms.map((room) => (
+              {currentRooms.map((room) => (
                 <tr key={room.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -238,6 +258,98 @@ const RoomsManagement = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Componente de paginación */}
+        {filteredRooms.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200">
+            <div className="mb-4 sm:mb-0">
+              <p className="text-sm text-gray-700">
+                Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a{' '}
+                <span className="font-medium">
+                  {Math.min(indexOfLastItem, filteredRooms.length)}
+                </span>{' '}
+                de <span className="font-medium">{filteredRooms.length}</span> resultados
+              </p>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1">
+                <label htmlFor="itemsPerPage" className="text-sm text-gray-700 mr-2">
+                  Mostrar:
+                </label>
+                <select
+                  id="itemsPerPage"
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
+                  className="text-sm border-gray-300 rounded focus:ring-primary-500 focus:border-primary-500"
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+              
+              <nav className="flex items-center space-x-2">
+                <button
+                  onClick={prevPage}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1 text-sm rounded-md ${
+                    currentPage === 1
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Anterior
+                </button>
+                
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNumber
+                    if (totalPages <= 5) {
+                      pageNumber = i + 1
+                    } else if (currentPage <= 3) {
+                      pageNumber = i + 1
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNumber = totalPages - 4 + i
+                    } else {
+                      pageNumber = currentPage - 2 + i
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNumber}
+                        onClick={() => paginate(pageNumber)}
+                        className={`px-3 py-1 text-sm rounded-md ${
+                          currentPage === pageNumber
+                            ? 'bg-primary-500 text-white'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        {pageNumber}
+                      </button>
+                    )
+                  })}
+                </div>
+                
+                <button
+                  onClick={nextPage}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-1 text-sm rounded-md ${
+                    currentPage === totalPages
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Siguiente
+                </button>
+              </nav>
+            </div>
+          </div>
+        )}
 
         {filteredRooms.length === 0 && (
           <div className="text-center py-12">
