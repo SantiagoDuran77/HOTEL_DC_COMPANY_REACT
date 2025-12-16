@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { getReservations, cancelReservation } from '../../services/api'
-import { Calendar, Bed, DollarSign, X, Clock } from 'lucide-react'
+import { Calendar, Bed, DollarSign, X, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const ClientReservations = () => {
   const [reservations, setReservations] = useState([])
   const [loading, setLoading] = useState(true)
+  
+  // ========== NUEVOS ESTADOS PARA PAGINACIÓN ==========
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(5) // Cambia a 6 si prefieres
 
   useEffect(() => {
     loadReservations()
@@ -26,6 +30,8 @@ const ClientReservations = () => {
       try {
         await cancelReservation(reservationId)
         await loadReservations()
+        // ========== VOLVER A LA PRIMERA PÁGINA AL CANCELAR ==========
+        setCurrentPage(1)
       } catch (error) {
         console.error('Error canceling reservation:', error)
         alert('No se pudo cancelar la reserva. Intenta nuevamente.')
@@ -64,6 +70,57 @@ const ClientReservations = () => {
     return diffDays >= 1 // Puede cancelar hasta 1 día antes
   }
 
+  // ========== FUNCIONES DE PAGINACIÓN ==========
+  
+  // Calcular índices para la página actual
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+  const currentReservations = reservations.slice(indexOfFirstItem, indexOfLastItem)
+  
+  // Calcular total de páginas
+  const totalPages = Math.ceil(reservations.length / itemsPerPage)
+  
+  // Cambiar de página
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1)
+    }
+  }
+  
+  const goToPrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1)
+    }
+  }
+  
+  const goToPage = (pageNumber) => {
+    setCurrentPage(pageNumber)
+  }
+  
+  // Generar números de página para mostrar
+  const getPageNumbers = () => {
+    const pageNumbers = []
+    const maxPagesToShow = 5
+    
+    if (totalPages <= maxPagesToShow) {
+      // Mostrar todas las páginas
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i)
+      }
+    } else {
+      // Mostrar páginas con elipsis
+      if (currentPage <= 3) {
+        pageNumbers.push(1, 2, 3, 4, '...', totalPages)
+      } else if (currentPage >= totalPages - 2) {
+        pageNumbers.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages)
+      } else {
+        pageNumbers.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages)
+      }
+    }
+    
+    return pageNumbers
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -80,11 +137,21 @@ const ClientReservations = () => {
         <p className="text-gray-600 mt-2">
           Gestiona y revisa todas tus reservas
         </p>
+        
+        {/* ========== CONTADOR DE RESERVAS ========== */}
+        <div className="mt-4 text-sm text-gray-600">
+          Mostrando {currentReservations.length} de {reservations.length} reservas
+          {reservations.length > itemsPerPage && (
+            <span className="ml-2">
+              (Página {currentPage} de {totalPages})
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Reservations List */}
       <div className="space-y-6">
-        {reservations.map((reservation) => (
+        {currentReservations.map((reservation) => (
           <div key={reservation.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
               <div className="flex-1">
@@ -200,6 +267,78 @@ const ClientReservations = () => {
           </div>
         ))}
       </div>
+
+      {/* ========== COMPONENTE DE PAGINACIÓN ========== */}
+      {reservations.length > itemsPerPage && (
+        <div className="flex flex-col sm:flex-row items-center justify-between pt-6 border-t border-gray-200">
+          {/* Información de página */}
+          <div className="text-sm text-gray-700 mb-4 sm:mb-0">
+            Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a{' '}
+            <span className="font-medium">
+              {Math.min(indexOfLastItem, reservations.length)}
+            </span>{' '}
+            de <span className="font-medium">{reservations.length}</span> reservas
+          </div>
+          
+          {/* Controles de paginación */}
+          <div className="flex items-center space-x-2">
+            {/* Botón anterior */}
+            <button
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
+              className={`inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Anterior
+            </button>
+            
+            {/* Números de página */}
+            <div className="hidden md:flex space-x-1">
+              {getPageNumbers().map((pageNum, index) => (
+                <button
+                  key={index}
+                  onClick={() => typeof pageNum === 'number' ? goToPage(pageNum) : null}
+                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                    pageNum === currentPage
+                      ? 'bg-primary-500 text-white'
+                      : pageNum === '...'
+                      ? 'text-gray-500 cursor-default'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                  disabled={pageNum === '...'}
+                >
+                  {pageNum}
+                </button>
+              ))}
+            </div>
+            
+            {/* Versión móvil - solo número actual */}
+            <div className="md:hidden flex items-center">
+              <span className="px-3 py-2 text-sm font-medium text-gray-700">
+                Página {currentPage} de {totalPages}
+              </span>
+            </div>
+            
+            {/* Botón siguiente */}
+            <button
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              className={`inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              Siguiente
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {reservations.length === 0 && (
         <div className="text-center py-12">

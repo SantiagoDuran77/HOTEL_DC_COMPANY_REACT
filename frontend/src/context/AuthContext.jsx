@@ -75,6 +75,33 @@ export const AuthProvider = ({ children }) => {
     window.location.href = '/auth/login'
   }
 
+  // 🆕 NUEVA FUNCIÓN: Actualizar datos del usuario
+  const updateUser = (updatedData) => {
+    console.log('🔄 AuthContext - Actualizando datos del usuario:', updatedData)
+    
+    if (!user) {
+      console.log('⚠️  No hay usuario para actualizar')
+      return
+    }
+    
+    try {
+      // 1. Combinar datos existentes con los nuevos
+      const updatedUser = { ...user, ...updatedData }
+      
+      // 2. Actualizar estado local
+      setUser(updatedUser)
+      
+      // 3. Actualizar localStorage para persistencia
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      
+      console.log('✅ AuthContext - Usuario actualizado:', updatedUser)
+      return updatedUser
+    } catch (error) {
+      console.error('❌ Error al actualizar usuario:', error)
+      throw error
+    }
+  }
+
   // Función que verifica autenticación CORREGIDA
   const isAuthenticated = () => {
     const token = localStorage.getItem('accessToken')
@@ -169,6 +196,7 @@ export const AuthProvider = ({ children }) => {
     return 'Cliente'
   }
 
+  // 🔧 Valor del contexto - AÑADIR updateUser aquí
   const value = {
     user,
     loading,
@@ -177,7 +205,8 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     isAdmin,
     getUserRole,
-    checkAuth
+    checkAuth,
+    updateUser // 🆕 NUEVA FUNCIÓN AÑADIDA
   }
 
   return (

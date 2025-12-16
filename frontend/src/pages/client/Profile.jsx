@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { User, Mail, Phone, MapPin, Globe, Save, Edit } from 'lucide-react'
+import { User, Mail, Phone, MapPin, Globe, Save, Edit, X } from 'lucide-react'
 
 const ClientProfile = () => {
   const { user } = useAuth()
@@ -31,8 +31,8 @@ const ClientProfile = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
-    
-    // Simular actualización
+
+    // Simular actualización local
     setTimeout(() => {
       setLoading(false)
       setIsEditing(false)
@@ -48,7 +48,7 @@ const ClientProfile = () => {
   }
 
   const nacionalidades = [
-    'Colombiana', 'Mexicana', 'Argentina', 'Peruana', 
+    'Colombiana', 'Mexicana', 'Argentina', 'Peruana',
     'Chilena', 'Ecuatoriana', 'Venezolana', 'Española',
     'Estadounidense', 'Otra'
   ]
@@ -67,9 +67,7 @@ const ClientProfile = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Mi Perfil</h1>
-          <p className="text-gray-600 mt-2">
-            Gestiona tu información personal
-          </p>
+          <p className="text-gray-600 mt-2">Gestiona tu información personal</p>
         </div>
         <button
           onClick={() => setIsEditing(!isEditing)}
@@ -160,11 +158,9 @@ const ClientProfile = () => {
                   <input
                     type="email"
                     name="email"
-                    required
-                    disabled={!isEditing}
+                    disabled
                     value={formData.email}
-                    onChange={handleChange}
-                    className="mt-1 input-field pl-10 disabled:bg-gray-50 disabled:text-gray-500"
+                    className="mt-1 input-field pl-10 bg-gray-50 text-gray-500 cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -178,10 +174,9 @@ const ClientProfile = () => {
                   <input
                     type="tel"
                     name="phone"
-                    disabled={!isEditing}
+                    disabled
                     value={formData.phone}
-                    onChange={handleChange}
-                    className="mt-1 input-field pl-10 disabled:bg-gray-50 disabled:text-gray-500"
+                    className="mt-1 input-field pl-10 bg-gray-50 text-gray-500 cursor-not-allowed"
                     placeholder="+57 300 123 4567"
                   />
                 </div>
@@ -196,10 +191,9 @@ const ClientProfile = () => {
                   <input
                     type="text"
                     name="address"
-                    disabled={!isEditing}
+                    disabled
                     value={formData.address}
-                    onChange={handleChange}
-                    className="mt-1 input-field pl-10 disabled:bg-gray-50 disabled:text-gray-500"
+                    className="mt-1 input-field pl-10 bg-gray-50 text-gray-500 cursor-not-allowed"
                     placeholder="Tu dirección completa"
                   />
                 </div>
@@ -211,10 +205,9 @@ const ClientProfile = () => {
                 </label>
                 <select
                   name="nationality"
-                  disabled={!isEditing}
+                  disabled
                   value={formData.nationality}
-                  onChange={handleChange}
-                  className="mt-1 input-field disabled:bg-gray-50 disabled:text-gray-500"
+                  className="mt-1 input-field bg-gray-50 text-gray-500 cursor-not-allowed"
                 >
                   {nacionalidades.map((nacionalidad) => (
                     <option key={nacionalidad} value={nacionalidad}>
