@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { User, Mail, Phone, MapPin, Globe, Save, Edit, X } from 'lucide-react'
+import Footer from '../../components/layout/Footer'
 
 const ClientProfile = () => {
   const { user } = useAuth()
@@ -62,191 +63,196 @@ const ClientProfile = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Mi Perfil</h1>
-          <p className="text-gray-600 mt-2">Gestiona tu información personal</p>
+    <>
+      <div className="space-y-6 mb-8">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Mi Perfil</h1>
+            <p className="text-gray-600 mt-2">Gestiona tu información personal</p>
+          </div>
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            className="flex items-center px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors duration-200"
+          >
+            {isEditing ? (
+              <>
+                <X className="h-4 w-4 mr-2" />
+                Cancelar
+              </>
+            ) : (
+              <>
+                <Edit className="h-4 w-4 mr-2" />
+                Editar Perfil
+              </>
+            )}
+          </button>
         </div>
-        <button
-          onClick={() => setIsEditing(!isEditing)}
-          className="flex items-center px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors duration-200"
-        >
-          {isEditing ? (
-            <>
-              <X className="h-4 w-4 mr-2" />
-              Cancelar
-            </>
-          ) : (
-            <>
-              <Edit className="h-4 w-4 mr-2" />
-              Editar Perfil
-            </>
-          )}
-        </button>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Summary */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="text-center">
-              <div className="bg-primary-100 text-primary-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <User className="h-10 w-10" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {formData.name} {formData.last_name}
-              </h2>
-              <p className="text-gray-600 mt-1">{formData.email}</p>
-              <div className="mt-4 space-y-2 text-sm text-gray-600">
-                <div className="flex items-center justify-center">
-                  <Phone className="h-4 w-4 mr-2" />
-                  <span>{formData.phone || 'No especificado'}</span>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Profile Summary */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="text-center">
+                <div className="bg-primary-100 text-primary-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <User className="h-10 w-10" />
                 </div>
-                <div className="flex items-center justify-center">
-                  <Globe className="h-4 w-4 mr-2" />
-                  <span>{formData.nationality}</span>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {formData.name} {formData.last_name}
+                </h2>
+                <p className="text-gray-600 mt-1">{formData.email}</p>
+                <div className="mt-4 space-y-2 text-sm text-gray-600">
+                  <div className="flex items-center justify-center">
+                    <Phone className="h-4 w-4 mr-2" />
+                    <span>{formData.phone || 'No especificado'}</span>
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <Globe className="h-4 w-4 mr-2" />
+                    <span>{formData.nationality}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Profile Form */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Nombre *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    required
-                    disabled={!isEditing}
-                    value={formData.name}
-                    onChange={handleChange}
-                    className="mt-1 input-field disabled:bg-gray-50 disabled:text-gray-500"
-                  />
+          {/* Profile Form */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Nombre *
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      required
+                      disabled={!isEditing}
+                      value={formData.name}
+                      onChange={handleChange}
+                      className="mt-1 input-field disabled:bg-gray-50 disabled:text-gray-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Apellido *
+                    </label>
+                    <input
+                      type="text"
+                      name="last_name"
+                      required
+                      disabled={!isEditing}
+                      value={formData.last_name}
+                      onChange={handleChange}
+                      className="mt-1 input-field disabled:bg-gray-50 disabled:text-gray-500"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Apellido *
+                    Correo Electrónico *
                   </label>
-                  <input
-                    type="text"
-                    name="last_name"
-                    required
-                    disabled={!isEditing}
-                    value={formData.last_name}
-                    onChange={handleChange}
-                    className="mt-1 input-field disabled:bg-gray-50 disabled:text-gray-500"
-                  />
+                  <div className="mt-1 relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                    <input
+                      type="email"
+                      name="email"
+                      disabled
+                      value={formData.email}
+                      className="mt-1 input-field pl-10 bg-gray-50 text-gray-500 cursor-not-allowed"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Correo Electrónico *
-                </label>
-                <div className="mt-1 relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                  <input
-                    type="email"
-                    name="email"
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Teléfono
+                  </label>
+                  <div className="mt-1 relative">
+                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                    <input
+                      type="tel"
+                      name="phone"
+                      disabled
+                      value={formData.phone}
+                      className="mt-1 input-field pl-10 bg-gray-50 text-gray-500 cursor-not-allowed"
+                      placeholder="+57 300 123 4567"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Dirección
+                  </label>
+                  <div className="mt-1 relative">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                    <input
+                      type="text"
+                      name="address"
+                      disabled
+                      value={formData.address}
+                      className="mt-1 input-field pl-10 bg-gray-50 text-gray-500 cursor-not-allowed"
+                      placeholder="Tu dirección completa"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Nacionalidad
+                  </label>
+                  <select
+                    name="nationality"
                     disabled
-                    value={formData.email}
-                    className="mt-1 input-field pl-10 bg-gray-50 text-gray-500 cursor-not-allowed"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Teléfono
-                </label>
-                <div className="mt-1 relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                  <input
-                    type="tel"
-                    name="phone"
-                    disabled
-                    value={formData.phone}
-                    className="mt-1 input-field pl-10 bg-gray-50 text-gray-500 cursor-not-allowed"
-                    placeholder="+57 300 123 4567"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Dirección
-                </label>
-                <div className="mt-1 relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                  <input
-                    type="text"
-                    name="address"
-                    disabled
-                    value={formData.address}
-                    className="mt-1 input-field pl-10 bg-gray-50 text-gray-500 cursor-not-allowed"
-                    placeholder="Tu dirección completa"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Nacionalidad
-                </label>
-                <select
-                  name="nationality"
-                  disabled
-                  value={formData.nationality}
-                  className="mt-1 input-field bg-gray-50 text-gray-500 cursor-not-allowed"
-                >
-                  {nacionalidades.map((nacionalidad) => (
-                    <option key={nacionalidad} value={nacionalidad}>
-                      {nacionalidad}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {isEditing && (
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(false)}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    value={formData.nationality}
+                    className="mt-1 input-field bg-gray-50 text-gray-500 cursor-not-allowed"
                   >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex items-center px-6 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors duration-200"
-                  >
-                    {loading ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Guardar Cambios
-                      </>
-                    )}
-                  </button>
+                    {nacionalidades.map((nacionalidad) => (
+                      <option key={nacionalidad} value={nacionalidad}>
+                        {nacionalidad}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
-            </form>
+
+                {isEditing && (
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(false)}
+                      className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="flex items-center px-6 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors duration-200"
+                    >
+                      {loading ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Guardar Cambios
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </form>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+      
+      {/* Footer */}
+      <Footer />
+    </>
   )
 }
 

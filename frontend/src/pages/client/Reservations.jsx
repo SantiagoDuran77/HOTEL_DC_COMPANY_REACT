@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { getReservations, cancelReservation } from '../../services/api'
 import { Calendar, Bed, DollarSign, X, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
+import Footer from '../../components/layout/Footer'
 
 const ClientReservations = () => {
   const [reservations, setReservations] = useState([])
@@ -130,228 +131,233 @@ const ClientReservations = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Mis Reservas</h1>
-        <p className="text-gray-600 mt-2">
-          Gestiona y revisa todas tus reservas
-        </p>
-        
-        {/* ========== CONTADOR DE RESERVAS ========== */}
-        <div className="mt-4 text-sm text-gray-600">
-          Mostrando {currentReservations.length} de {reservations.length} reservas
-          {reservations.length > itemsPerPage && (
-            <span className="ml-2">
-              (Página {currentPage} de {totalPages})
-            </span>
-          )}
+    <>
+      <div className="space-y-6 mb-8">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Mis Reservas</h1>
+          <p className="text-gray-600 mt-2">
+            Gestiona y revisa todas tus reservas
+          </p>
+          
+          {/* ========== CONTADOR DE RESERVAS ========== */}
+          <div className="mt-4 text-sm text-gray-600">
+            Mostrando {currentReservations.length} de {reservations.length} reservas
+            {reservations.length > itemsPerPage && (
+              <span className="ml-2">
+                (Página {currentPage} de {totalPages})
+              </span>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Reservations List */}
-      <div className="space-y-6">
-        {currentReservations.map((reservation) => (
-          <div key={reservation.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex-1">
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="bg-primary-100 text-primary-600 p-3 rounded-lg">
-                    <Calendar className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      Reserva #{reservation.id}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      Creada el {formatDate(reservation.booking_date)}
-                    </p>
-                  </div>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(reservation.status)}`}>
-                    {reservation.status}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-gray-100 p-2 rounded-lg">
-                      <Bed className="h-4 w-4 text-gray-600" />
+        {/* Reservations List */}
+        <div className="space-y-6">
+          {currentReservations.map((reservation) => (
+            <div key={reservation.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-4 mb-4">
+                    <div className="bg-primary-100 text-primary-600 p-3 rounded-lg">
+                      <Calendar className="h-6 w-6" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">Habitación {reservation.room.number}</p>
-                      <p className="text-xs text-gray-600 capitalize">{reservation.room.type}</p>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Reserva #{reservation.id}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Creada el {formatDate(reservation.booking_date)}
+                      </p>
+                    </div>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(reservation.status)}`}>
+                      {reservation.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-gray-100 p-2 rounded-lg">
+                        <Bed className="h-4 w-4 text-gray-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Habitación {reservation.room.number}</p>
+                        <p className="text-xs text-gray-600 capitalize">{reservation.room.type}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-gray-600">Fecha de estadía</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatDate(reservation.start_date)} - {formatDate(reservation.end_date)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-gray-600">Huéspedes</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {reservation.details?.guests || 1} persona(s)
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-gray-600">Total</p>
+                      <p className="text-lg font-semibold text-gray-900">
+                        {formatCurrency(reservation.details.total_cost)}
+                      </p>
                     </div>
                   </div>
 
-                  <div>
-                    <p className="text-sm text-gray-600">Fecha de estadía</p>
-                    <p className="text-sm font-medium text-gray-900">
-                      {formatDate(reservation.start_date)} - {formatDate(reservation.end_date)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-gray-600">Huéspedes</p>
-                    <p className="text-sm font-medium text-gray-900">
-                      {reservation.details?.guests || 1} persona(s)
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-gray-600">Total</p>
-                    <p className="text-lg font-semibold text-gray-900">
-                      {formatCurrency(reservation.details.total_cost)}
-                    </p>
-                  </div>
+                  {reservation.services && reservation.services.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm text-gray-600 mb-2">Servicios adicionales:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {reservation.services.map((service, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                          >
+                            {service.name} (x{service.quantity})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {reservation.services && reservation.services.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm text-gray-600 mb-2">Servicios adicionales:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {reservation.services.map((service, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                        >
-                          {service.name} (x{service.quantity})
-                        </span>
-                      ))}
-                    </div>
+                <div className="mt-4 lg:mt-0 lg:ml-6">
+                  <div className="flex flex-col space-y-2">
+                    {canCancel(reservation.status, reservation.start_date) && (
+                      <button
+                        onClick={() => handleCancel(reservation.id)}
+                        className="flex items-center justify-center px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Cancelar
+                      </button>
+                    )}
+                    
+                    {reservation.status === 'Confirmada' && (
+                      <div className="flex items-center text-sm text-green-600">
+                        <Clock className="h-4 w-4 mr-1" />
+                        Confirmada
+                      </div>
+                    )}
+
+                    {reservation.status === 'Pendiente' && (
+                      <div className="flex items-center text-sm text-yellow-600">
+                        <Clock className="h-4 w-4 mr-1" />
+                        Pendiente de confirmación
+                      </div>
+                    )}
+
+                    {reservation.status === 'Cancelada' && (
+                      <div className="flex items-center text-sm text-red-600">
+                        <X className="h-4 w-4 mr-1" />
+                        Cancelada
+                      </div>
+                    )}
+
+                    {reservation.status === 'Completada' && (
+                      <div className="flex items-center text-sm text-blue-600">
+                        <Calendar className="h-4 w-4 mr-1" />
+                        Completada
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-
-              <div className="mt-4 lg:mt-0 lg:ml-6">
-                <div className="flex flex-col space-y-2">
-                  {canCancel(reservation.status, reservation.start_date) && (
-                    <button
-                      onClick={() => handleCancel(reservation.id)}
-                      className="flex items-center justify-center px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors duration-200"
-                    >
-                      <X className="h-4 w-4 mr-1" />
-                      Cancelar
-                    </button>
-                  )}
-                  
-                  {reservation.status === 'Confirmada' && (
-                    <div className="flex items-center text-sm text-green-600">
-                      <Clock className="h-4 w-4 mr-1" />
-                      Confirmada
-                    </div>
-                  )}
-
-                  {reservation.status === 'Pendiente' && (
-                    <div className="flex items-center text-sm text-yellow-600">
-                      <Clock className="h-4 w-4 mr-1" />
-                      Pendiente de confirmación
-                    </div>
-                  )}
-
-                  {reservation.status === 'Cancelada' && (
-                    <div className="flex items-center text-sm text-red-600">
-                      <X className="h-4 w-4 mr-1" />
-                      Cancelada
-                    </div>
-                  )}
-
-                  {reservation.status === 'Completada' && (
-                    <div className="flex items-center text-sm text-blue-600">
-                      <Calendar className="h-4 w-4 mr-1" />
-                      Completada
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
+          ))}
+        </div>
+
+        {/* ========== COMPONENTE DE PAGINACIÓN ========== */}
+        {reservations.length > itemsPerPage && (
+          <div className="flex flex-col sm:flex-row items-center justify-between pt-6 border-t border-gray-200">
+            {/* Información de página */}
+            <div className="text-sm text-gray-700 mb-4 sm:mb-0">
+              Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a{' '}
+              <span className="font-medium">
+                {Math.min(indexOfLastItem, reservations.length)}
+              </span>{' '}
+              de <span className="font-medium">{reservations.length}</span> reservas
+            </div>
+            
+            {/* Controles de paginación */}
+            <div className="flex items-center space-x-2">
+              {/* Botón anterior */}
+              <button
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+                className={`inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                  currentPage === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Anterior
+              </button>
+              
+              {/* Números de página */}
+              <div className="hidden md:flex space-x-1">
+                {getPageNumbers().map((pageNum, index) => (
+                  <button
+                    key={index}
+                    onClick={() => typeof pageNum === 'number' ? goToPage(pageNum) : null}
+                    className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                      pageNum === currentPage
+                        ? 'bg-primary-500 text-white'
+                        : pageNum === '...'
+                        ? 'text-gray-500 cursor-default'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                    disabled={pageNum === '...'}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Versión móvil - solo número actual */}
+              <div className="md:hidden flex items-center">
+                <span className="px-3 py-2 text-sm font-medium text-gray-700">
+                  Página {currentPage} de {totalPages}
+                </span>
+              </div>
+              
+              {/* Botón siguiente */}
+              <button
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+                className={`inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                  currentPage === totalPages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                Siguiente
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </button>
+            </div>
           </div>
-        ))}
+        )}
+
+        {reservations.length === 0 && (
+          <div className="text-center py-12">
+            <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No tienes reservas
+            </h3>
+            <p className="text-gray-600">
+              Comienza explorando nuestras habitaciones disponibles y haz tu primera reserva.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* ========== COMPONENTE DE PAGINACIÓN ========== */}
-      {reservations.length > itemsPerPage && (
-        <div className="flex flex-col sm:flex-row items-center justify-between pt-6 border-t border-gray-200">
-          {/* Información de página */}
-          <div className="text-sm text-gray-700 mb-4 sm:mb-0">
-            Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a{' '}
-            <span className="font-medium">
-              {Math.min(indexOfLastItem, reservations.length)}
-            </span>{' '}
-            de <span className="font-medium">{reservations.length}</span> reservas
-          </div>
-          
-          {/* Controles de paginación */}
-          <div className="flex items-center space-x-2">
-            {/* Botón anterior */}
-            <button
-              onClick={goToPrevPage}
-              disabled={currentPage === 1}
-              className={`inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-                currentPage === 1
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-              }`}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Anterior
-            </button>
-            
-            {/* Números de página */}
-            <div className="hidden md:flex space-x-1">
-              {getPageNumbers().map((pageNum, index) => (
-                <button
-                  key={index}
-                  onClick={() => typeof pageNum === 'number' ? goToPage(pageNum) : null}
-                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-                    pageNum === currentPage
-                      ? 'bg-primary-500 text-white'
-                      : pageNum === '...'
-                      ? 'text-gray-500 cursor-default'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                  }`}
-                  disabled={pageNum === '...'}
-                >
-                  {pageNum}
-                </button>
-              ))}
-            </div>
-            
-            {/* Versión móvil - solo número actual */}
-            <div className="md:hidden flex items-center">
-              <span className="px-3 py-2 text-sm font-medium text-gray-700">
-                Página {currentPage} de {totalPages}
-              </span>
-            </div>
-            
-            {/* Botón siguiente */}
-            <button
-              onClick={goToNextPage}
-              disabled={currentPage === totalPages}
-              className={`inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-                currentPage === totalPages
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-              }`}
-            >
-              Siguiente
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {reservations.length === 0 && (
-        <div className="text-center py-12">
-          <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            No tienes reservas
-          </h3>
-          <p className="text-gray-600">
-            Comienza explorando nuestras habitaciones disponibles y haz tu primera reserva.
-          </p>
-        </div>
-      )}
-    </div>
+      {/* Footer */}
+      <Footer />
+    </>
   )
 }
 
